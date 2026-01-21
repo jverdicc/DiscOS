@@ -41,6 +41,53 @@ If you are new, start here:
 
 If you want to understand the deeper design, skim `docs/rfc/` starting with the overview RFC.
 
+## How DiscOS works (end-to-end)
+
+DiscOS is a **local userland** that prepares hypotheses for kernel-grade evaluation. The canonical lifecycle looks like:
+
+1. **Author a hypothesis** in HIR (currently AlphaHIR). HIR is a typed, deterministic DAG and can be canonicalized for hashing and lineage tracking.
+2. **Lint for admissibility** (structure + optional physics/PDS checks). This blocks invalid ops, cycles, missing inputs, or dimensionally inconsistent expressions.
+3. **Store in the workspace** (`.discos/`), using content-addressed HIR hashes (`hid_struct`) so duplicates are detected and lineage is trackable.
+4. **Run execution lanes** (FAST/CANARY/HEAVY locally, SEALED only with a kernel). Receipts are written per lane.
+5. **Bundle as a PCDB** (Proof-Carrying Discovery Bundle) that includes canonical HIR, receipts, and a manifest with hashes for reproducibility.
+
+DiscOS never “finalizes” discoveries by itself. That is EvidenceOS’s job: the kernel meters evidence budgets, controls SEALED holdouts, and performs deterministic judging. DiscOS prepares artifacts and metadata for that pipeline.
+
+## Execution overview (lanes + substrates)
+
+DiscOS models a **lane funnel** that mirrors the EvidenceOS scheduler:
+
+| Lane | Purpose | DiscOS behavior |
+| --- | --- | --- |
+| FAST | Cheap heuristics/sketches | Local-only quick passes |
+| CANARY | Deterministic sandbox run | WASM-preferred execution, with a Python fallback |
+| HEAVY | Expensive training/eval | MVP uses a local synthetic run (hardening is a roadmap item) |
+| SEALED | Kernel-only holdout | DiscOS blocks this without EvidenceOS |
+
+**Determinism + safety.** The CANARY lane emphasizes deterministic WASM execution (no WASI by default, pinned engine, NaN canonicalization). HEAVY is designed for hardened substrates (microVM/gVisor/nsjail), but the local reference implementation keeps it lightweight for demonstration. SEALED is intentionally unavailable in userland.
+
+## Quant rationale & implementation details
+
+DiscOS is quant-focused by design, with safeguards aimed at reproducible sequential discovery:
+
+- **Canonical HIR + hashing.** Hypotheses are canonicalized and hashed into `hid_struct` identifiers for provenance and replayable bundles.
+- **Lineage-aware budgeting.** The kernel’s Conservation Ledger meters per-family wealth (e-values, alpha-investing, LORD, SAFFRON). DiscOS uses those signals to guide which families advance.
+- **Physics/units lint (PDS).** Optional Physical Dimension System checks enforce that arithmetic respects dimension algebra (e.g., sums require matching dimensions; `log/exp` require dimensionless inputs).
+- **AlphaHIR operator whitelist.** MVP AlphaHIR focuses on common quantitative ops (`add`, `sub`, `mul`, `safe_div`, `abs`, `clip`, `log`, `exp`) and enforces DAG acyclicity.
+- **Receipts + PCDBs.** Every lane emits receipts, and bundles package the canonical HIR, receipts, and manifest hashes for third‑party verification.
+
+The reference implementation uses synthetic inputs for quick demos; the pipeline is designed to plug into real data sources and kernel‑attested runs once EvidenceOS is present.
+
+## Who DiscOS is for
+
+DiscOS is built for teams who want **auditability without slowing down exploration**:
+
+- **Quant researchers** who need structured, repeatable hypothesis pipelines.
+- **Safety/infra engineers** who need clear boundaries between untrusted ideation and kernel‑certified evaluation.
+- **Auditors** who want replayable, self‑contained bundles with deterministic hashes and receipts.
+
+If you are experimenting locally, DiscOS is a friendly “lab notebook.” If you are running production‑grade discovery, DiscOS is the **userland front‑end** to EvidenceOS.
+
 ## Quickstart
 
 ### 1) Create a virtual environment
@@ -175,6 +222,20 @@ DiscOS is intentionally a **userland reference**. The pieces below are either MV
 - **Kernel-side services are required for full pipeline behavior.** Budgeting, sealed holdout access, and judging live in EvidenceOS; DiscOS only prepares and bundles artifacts.
 
 If you want to contribute: help wire in a hardened runner, add a container/microVM backend, or prototype a real UVP client.
+
+## Provenance and novelty
+
+DiscOS builds on established ideas and tooling. The detailed maps live in:
+
+- **Provenance map** (`docs/PROVENANCE.md`) — citations for adaptive holdout reuse,
+  sequential testing, provenance standards, transparency logs, sandboxing, and
+  evaluation platforms.
+- **Novelty map** (`docs/NOVELTY.md`) — what is new (kernel-enforced conservation,
+  lineage-aware budgets, proof-carrying discovery, UVP syscall boundary) vs.
+  what is intentionally reused.
+
+These documents make the dependency chain explicit and help reviewers distinguish
+foundational work from system integration.
 
 ## License
 Apache-2.0
