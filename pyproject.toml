@@ -1,11 +1,11 @@
 [project]
-name = "discos"
-version = "1.0.0"
+name = "DiscOS"
+version = "0.5.0"
 description = "DiscOS: Discovery OS userland for EvidenceOS (UVP-compatible)."
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
-authors = [{name = "DiscOS Contributors"}]
+authors = [{name = "Joseph Verdicchio"}]
 
 dependencies = [
   "pydantic>=2.0",
