@@ -50,7 +50,15 @@ def run_canary(
     input_order: List[str],
     use_wasmtime: bool = True,
 ) -> Tuple[np.ndarray, CanaryReport]:
-    n = int(min(len(next(iter(inputs.values()))), 512))
+    if not input_order:
+        raise ValueError("input_order must include at least one input name")
+    missing = [name for name in input_order if name not in inputs]
+    if missing:
+        raise ValueError(f"inputs missing required keys: {missing}")
+    lengths = [len(inputs[name]) for name in input_order]
+    if len(set(lengths)) != 1:
+        raise ValueError(f"inputs have mismatched lengths: {dict(zip(input_order, lengths))}")
+    n = int(min(lengths[0], 512))
     out = np.empty(n, dtype=np.float64)
     notes: List[str] = []
 

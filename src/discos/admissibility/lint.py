@@ -22,8 +22,16 @@ def lint_alphahir(hir: Dict[str, Any], *, phys_lint: bool = True) -> Dict[str, A
     warnings: List[Dict[str, Any]] = []
 
     nodes = hir.get("nodes", [])
-    node_ids = {n.get("id") for n in nodes}
+    node_id_list = [n.get("id") for n in nodes if n.get("id") is not None]
+    node_ids = set(node_id_list)
     out_id = hir.get("output_node")
+
+    if len(node_id_list) != len(node_ids):
+        counts: Dict[str, int] = {}
+        for nid in node_id_list:
+            counts[nid] = counts.get(nid, 0) + 1
+        dupes = sorted([nid for nid, count in counts.items() if count > 1])
+        errors.append({"code": "E_DUP_NODE_ID", "details": {"duplicate_ids": dupes}})
 
     if out_id not in node_ids:
         errors.append({"code": "E_OUTPUT_MISSING", "details": {"output_node": out_id}})
