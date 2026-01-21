@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from pydantic import ValidationError
+
 from discos.config import DiscOSConfig
 from discos.hir.alphahir import alphahir_template_simple_return, AlphaHIR
 from discos.registry.workspace import Workspace
@@ -16,6 +18,21 @@ from discos.artifact.bundle import build_pcdb_bundle
 
 def _read_json(path: Path) -> Dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+def _load_hir(path: Path) -> Dict[str, Any]:
+    hir = _read_json(path)
+    model = AlphaHIR.model_validate(hir)
+    return model.to_canonical_dict()
+
+def _schema_error_payload(error: ValidationError) -> Dict[str, Any]:
+    return {
+        "ok": False,
+        "error": {
+            "code": "E_SCHEMA",
+            "message": "HIR schema validation failed",
+            "details": error.errors(),
+        },
+    }
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -35,7 +52,11 @@ def cmd_alphahir_new(args: argparse.Namespace) -> int:
 def cmd_lint(args: argparse.Namespace) -> int:
     cfg = DiscOSConfig.load(args.config)
     ws = Workspace(cfg)
-    hir = _read_json(Path(args.hir))
+    try:
+        hir = _load_hir(Path(args.hir))
+    except ValidationError as e:
+        print(json.dumps(_schema_error_payload(e), indent=2))
+        return 2
     try:
         report = lint_alphahir(hir, phys_lint=cfg.phys_lint)
     except LintError as e:
@@ -51,29 +72,34 @@ def cmd_run(args: argparse.Namespace) -> int:
     ws.init()
 
     hir_path = Path(args.hir)
-    hir = _read_json(hir_path)
-    hid = ws.store_hypothesis(hir, family_id=args.family)
+    try:
+        hir = _load_hir(hir_path)
+    except ValidationError as e:
+        print(json.dumps(_schema_error_payload(e), indent=2))
+        return 2
 
     lane = args.lane.upper()
-    if lane == "FAST":
+    report = lint_alphahir(hir, phys_lint=cfg.phys_lint)
+    if not report["ok"]:
+        print(json.dumps(report, indent=2))
+        return 2
+    hid = ws.store_hypothesis(hir, family_id=args.family)
+
+    if lane in ("FAST", "CANARY"):
         # FAST lane = compute behavior sketch via python evaluator on small synthetic data
         # For MVP, reuse CANARY code path with python fallback if wasm unavailable.
-        pass
-
-    if lane == "CANARY":
-        report = lint_alphahir(hir, phys_lint=cfg.phys_lint)
-        if not report["ok"]:
-            print(json.dumps(report, indent=2))
-            return 2
-
         wat = generate_wat_for_alphahir(hir, input_order=["open", "close"]).wat
         # synthetic data
         import numpy as np
         rng = np.random.default_rng(0)
         open_ = 100 + rng.normal(0, 1, size=2048).cumsum()
         close_ = open_ * (1 + rng.normal(0, 0.01, size=2048))
-        outputs, canary = run_canary(wat, inputs={"open": open_, "close": close_}, input_order=["open", "close"], use_wasmtime=cfg.prefer_wasm_canary)
-        receipt = ws.write_receipt(hid, lane="CANARY", payload=canary.to_dict())
+        try:
+            outputs, canary = run_canary(wat, inputs={"open": open_, "close": close_}, input_order=["open", "close"], use_wasmtime=cfg.prefer_wasm_canary)
+        except ValueError as e:
+            print(json.dumps({"ok": False, "error": {"code": "E_INPUTS_INVALID", "message": str(e)}}, indent=2))
+            return 2
+        receipt = ws.write_receipt(hid, lane=lane, payload=canary.to_dict())
         print(json.dumps({"hid_struct": hid, "receipt": str(receipt), "canary": canary.to_dict()}, indent=2))
         return 0
 
@@ -109,7 +135,11 @@ def cmd_bundle(args: argparse.Namespace) -> int:
     cfg = DiscOSConfig.load(args.config)
     ws = Workspace(cfg)
     ws.init()
-    hir = _read_json(Path(args.hir))
+    try:
+        hir = _load_hir(Path(args.hir))
+    except ValidationError as e:
+        print(json.dumps(_schema_error_payload(e), indent=2))
+        return 2
     hid = ws.store_hypothesis(hir, family_id=args.family)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
