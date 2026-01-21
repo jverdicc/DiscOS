@@ -1,0 +1,15 @@
+# DiscOS configuration (workspace-local)
+gate_mode: hard
+
+phys_lint: true
+causal_lint: false
+meta_judge: false
+human_signoff: false
+
+prefer_wasm_canary: true
+heavy_lane: local
+sealed_enabled: false
+
+ledger_policy: e_process
+
+workspace_dir: .discos
