@@ -19,15 +19,7 @@ pub fn accuracy_value_det(x: f64, b: f64) -> f64 {
 }
 
 fn quantize_unit_interval(num_buckets: u32, v: f64) -> u32 {
-    let clamped = if v.is_nan() {
-        0.0
-    } else if v < 0.0 {
-        0.0
-    } else if v > 1.0 {
-        1.0
-    } else {
-        v
-    };
+    let clamped = if v.is_nan() { 0.0 } else { v.clamp(0.0, 1.0) };
     let max_idx = (num_buckets - 1) as f64;
     let idx = (clamped * max_idx).round();
     let idx_i = idx as i64;

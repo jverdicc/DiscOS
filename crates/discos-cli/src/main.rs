@@ -351,14 +351,8 @@ async fn main() -> anyhow::Result<()> {
             };
 
             let (mut client_a, session_a) = create_session(&args.endpoint, params_a).await?;
-            let holdout_a = init_holdout(
-                &mut client_a,
-                &session_a,
-                pb::HoldoutKind::HoldoutKindLabels,
-                seed,
-                n,
-            )
-            .await?;
+            let holdout_a =
+                init_holdout(&mut client_a, &session_a, pb::HoldoutKind::Labels, seed, n).await?;
 
             let mut oracle_a = GrpcLabelsOracle {
                 client: client_a,
@@ -379,14 +373,8 @@ async fn main() -> anyhow::Result<()> {
             };
 
             let (mut client_b, session_b) = create_session(&args.endpoint, params_b).await?;
-            let holdout_b = init_holdout(
-                &mut client_b,
-                &session_b,
-                pb::HoldoutKind::HoldoutKindLabels,
-                seed,
-                n,
-            )
-            .await?;
+            let holdout_b =
+                init_holdout(&mut client_b, &session_b, pb::HoldoutKind::Labels, seed, n).await?;
 
             let mut oracle_b = GrpcLabelsOracle {
                 client: client_b,
@@ -469,7 +457,7 @@ async fn main() -> anyhow::Result<()> {
                 let holdout_id = init_holdout(
                     &mut client,
                     &session_id,
-                    pb::HoldoutKind::HoldoutKindScalarBoundary,
+                    pb::HoldoutKind::ScalarBoundary,
                     seed,
                     0,
                 )
@@ -554,14 +542,8 @@ async fn main() -> anyhow::Result<()> {
             };
 
             let (mut client, session_id) = create_session(&args.endpoint, params).await?;
-            let holdout_id = init_holdout(
-                &mut client,
-                &session_id,
-                pb::HoldoutKind::HoldoutKindLabels,
-                seed,
-                n,
-            )
-            .await?;
+            let holdout_id =
+                init_holdout(&mut client, &session_id, pb::HoldoutKind::Labels, seed, n).await?;
 
             // Spend leakage via oracle calls.
             let zero_preds = vec![0u8; n as usize];
