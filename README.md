@@ -13,6 +13,8 @@ This repository contains:
 - `discos-cli`: a CLI tool that connects to EvidenceOS over gRPC.
 - `discos-core`: reusable discovery algorithms + simulation harnesses.
 - `examples/python_ipc`: a minimal Python client showing interoperability with the Rust kernel.
+- `integrations/openclaw-plugin`: a TypeScript OpenClaw plugin that performs hard tool-call
+  preflight enforcement against EvidenceOS policy decisions.
 
 ## Quickstart
 
@@ -55,6 +57,26 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 \
 ## Notes
 
 - `InitHoldout` is a simulation endpoint. Real deployments must initialize holdouts out-of-band.
+
+## OpenClaw integration (plugin)
+
+DiscOS includes a userland OpenClaw plugin under
+`integrations/openclaw-plugin` (`@evidenceos/openclaw-guard`) that enforces
+EvidenceOS preflight policy checks in `before_tool_call`.
+
+The plugin is designed as **hard enforcement** on the tool execution path:
+
+- `DENY`/`REQUIRE_HUMAN` decisions map to `{ block: true, blockReason }`
+- `DOWNGRADE`/sanitization decisions can rewrite tool parameters
+- each decision emits a deterministic audit event (`toolName`, params hash,
+  reason code, budget delta)
+
+Default posture:
+
+- fail-closed for high-risk tools if EvidenceOS is unavailable
+- strict policy timeout + circuit breaker
+- high-priority hook ordering
+- allow paths omit `block` (never return `block: false`)
 
 Certification demo (end-to-end ETL append):
 

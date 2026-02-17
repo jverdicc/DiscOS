@@ -1,0 +1,26 @@
+{
+  "name": "@evidenceos/openclaw-guard",
+  "version": "0.1.0",
+  "description": "EvidenceOS policy enforcement plugin for OpenClaw tool calls",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "keywords": [
+    "openclaw",
+    "evidenceos",
+    "agent-security",
+    "policy-enforcement"
+  ],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
