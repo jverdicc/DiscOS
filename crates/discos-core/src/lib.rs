@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Joseph Verdicchio and DiscOS  Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! discos-core
 //!
 //! DiscOS is the untrusted discovery/userland side of the system.

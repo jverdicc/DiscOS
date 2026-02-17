@@ -1,3 +1,6 @@
+<!-- Copyright (c) 2026 Joseph Verdicchio and DiscOS  Contributors -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Python IPC example (DiscOS ↔ EvidenceOS)
 
 This folder demonstrates interoperability with the **Rust EvidenceOS kernel** via gRPC.

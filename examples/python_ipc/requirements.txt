@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Joseph Verdicchio and DiscOS  Contributors
+# SPDX-License-Identifier: Apache-2.0
+
 grpcio==1.64.1
 grpcio-tools==1.64.1
 protobuf==5.27.2

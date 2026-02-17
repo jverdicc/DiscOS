@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Joseph Verdicchio and DiscOS  Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::Context;
 use async_trait::async_trait;
 use rand::Rng;
