@@ -1,12 +1,8 @@
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-build/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.discos/
-*.zip
+/target
+**/*.rs.bk
+
+# Python example
+examples/python_ipc/.venv
+examples/python_ipc/__pycache__
+examples/python_ipc/*_pb2.py
+examples/python_ipc/*_pb2_grpc.py
