@@ -269,7 +269,10 @@ impl BudgetedBoundaryOracles for GrpcBoundaryOracles {
 async fn create_session(
     endpoint: &str,
     params: SessionParams,
-) -> anyhow::Result<(pb::evidence_os_client::EvidenceOsClient<tonic::transport::Channel>, String)> {
+) -> anyhow::Result<(
+    pb::evidence_os_client::EvidenceOsClient<tonic::transport::Channel>,
+    String,
+)> {
     let mut client = pb::evidence_os_client::EvidenceOsClient::connect(endpoint.to_string())
         .await
         .context("connect")?;
@@ -321,9 +324,10 @@ async fn main() -> anyhow::Result<()> {
 
     match args.cmd {
         Command::Health => {
-            let mut client = pb::evidence_os_client::EvidenceOsClient::connect(args.endpoint.clone())
-                .await
-                .context("connect")?;
+            let mut client =
+                pb::evidence_os_client::EvidenceOsClient::connect(args.endpoint.clone())
+                    .await
+                    .context("connect")?;
             let resp = client.health(pb::HealthRequest {}).await?.into_inner();
             println!("{}", serde_json::json!({"status": resp.status}));
         }
@@ -430,7 +434,12 @@ async fn main() -> anyhow::Result<()> {
                 for t in 0..trials {
                     let seed = seed0 + t as u64;
                     let b = generate_boundary(seed);
-                    let dbg = attacker_ternary_standard(b, max_queries, safety_margin, target_true_accuracy);
+                    let dbg = attacker_ternary_standard(
+                        b,
+                        max_queries,
+                        safety_margin,
+                        target_true_accuracy,
+                    );
                     let safe = dbg.safety_response == Some(1);
                     let true_acc = accuracy_value_det(dbg.x_submit, b);
                     if safe && true_acc >= target_true_accuracy {
@@ -663,7 +672,11 @@ mod tests {
             .await
             .unwrap();
 
-        let h = client.health(pb::HealthRequest {}).await.unwrap().into_inner();
+        let h = client
+            .health(pb::HealthRequest {})
+            .await
+            .unwrap()
+            .into_inner();
         assert_eq!(h.status, "SERVING");
     }
 }

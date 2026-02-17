@@ -1,0 +1,77 @@
+<!-- Copyright (c) 2026 Joseph Verdicchio and DiscOS Contributors -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+# @evidenceos/openclaw-guard
+
+OpenClaw plugin that hard-gates tool execution through EvidenceOS preflight policy checks.
+
+## Why
+
+This plugin is designed to be a drop-in safety middleware for OpenClaw:
+
+- Enforces policy in `before_tool_call` (execution path hard gate).
+- Blocks with machine-readable reasons (`{ block: true, blockReason }`).
+- Applies parameter rewrites when EvidenceOS returns downgrade/sanitization.
+- Emits deterministic one-line JSON audit events for every decision.
+
+## Security defaults
+
+- **Fail-closed** for high-risk tools (`exec`, `fs.write`, `email.send`, etc.).
+- **Strict timeout** (default 120ms) for policy RPC.
+- **Circuit breaker** to avoid hanging OpenClaw loops when EvidenceOS is unstable.
+- **High priority hook** (`priority: 1000`) to reduce ordering conflicts.
+- **No `block: false` emission** to avoid accidental merge semantics override.
+
+## Install
+
+```bash
+openclaw plugins install @evidenceos/openclaw-guard
+```
+
+## Configure
+
+```ts
+import { createEvidenceGuardPlugin } from "@evidenceos/openclaw-guard";
+
+export default createEvidenceGuardPlugin({
+  evidenceUrl: "http://127.0.0.1:8787",
+  timeoutMs: 120,
+  failClosedRisk: "high-only",
+});
+```
+
+## Expected policy endpoint
+
+This plugin calls:
+
+- `POST /v1/preflight_tool_call`
+
+With payload:
+
+```json
+{
+  "toolName": "fs.delete_tree",
+  "params": { "path": "/tmp/demo" },
+  "sessionId": "session-123",
+  "agentId": "agent-abc"
+}
+```
+
+Example response:
+
+```json
+{
+  "decision": "DENY",
+  "reasonCode": "IrreversibleActionRequiresApproval",
+  "reasonDetail": "Delete tree denied without human approval",
+  "budgetDelta": { "spent": 0, "remaining": 100 }
+}
+```
+
+## Demo sequence
+
+1. Start EvidenceOS (`evidenceosd start` or docker compose).
+2. Start OpenClaw gateway.
+3. Trigger a high-risk tool in a sandbox (for example `fs.delete_tree` against a temp directory).
+4. Verify OpenClaw receives a clean refusal with a machine-readable reason.
+5. Verify audit logs include `toolName`, `paramsHash`, `decision`, `reasonCode`, and budget state.
