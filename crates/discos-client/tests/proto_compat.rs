@@ -1,4 +1,7 @@
 use discos_client::pb;
+use prost::Message;
+use prost_types::FileDescriptorSet;
+use std::collections::BTreeSet;
 
 #[test]
 fn generated_client_exposes_expected_service_methods() {
@@ -22,4 +25,37 @@ fn generated_client_exposes_expected_service_methods() {
     }
 
     let _ = _assert_methods;
+}
+
+#[test]
+fn descriptor_contains_required_v2_rpcs() {
+    let descriptors = FileDescriptorSet::decode(evidenceos_protocol::FILE_DESCRIPTOR_SET)
+        .expect("decode embedded file descriptor set");
+
+    let mut methods = BTreeSet::new();
+    for file in descriptors.file {
+        let package = file.package.unwrap_or_default();
+        for service in file.service {
+            let service_name = service.name.unwrap_or_default();
+            for method in service.method {
+                let method_name = method.name.unwrap_or_default();
+                methods.insert(format!("{}.{}.{method_name}", package, service_name));
+            }
+        }
+    }
+
+    let required = [
+        "evidenceos.v1.EvidenceOS.CreateClaimV2",
+        "evidenceos.v1.EvidenceOS.CommitArtifacts",
+        "evidenceos.v1.EvidenceOS.ExecuteClaimV2",
+        "evidenceos.v1.EvidenceOS.FetchCapsule",
+        "evidenceos.v1.EvidenceOS.GetSignedTreeHead",
+        "evidenceos.v1.EvidenceOS.WatchRevocations",
+    ];
+
+    for rpc in required {
+        assert!(methods.contains(rpc), "missing required rpc {rpc}");
+    }
+
+    let _has_get_public_key = methods.contains("evidenceos.v1.EvidenceOS.GetPublicKey");
 }
