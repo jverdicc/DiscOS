@@ -1,0 +1,47 @@
+[
+  {
+    "name": "baseline",
+    "metadata": {
+      "lane": "cbrn",
+      "alpha_micros": 50000,
+      "epoch_config_ref": "epoch/v1",
+      "output_schema_id": "cbrn-sc.v1"
+    },
+    "signals": {
+      "semantic_hash": null,
+      "phys_hir_signature_hash": "0707070707070707070707070707070707070707070707070707070707070707",
+      "dependency_merkle_root": null
+    },
+    "expected_topic_id_hex": "1fae7c030bea4800b8d9392902fbe87e89ddabd76d6162b0357d67a9be1ba1cf"
+  },
+  {
+    "name": "with_semantic",
+    "metadata": {
+      "lane": "bio",
+      "alpha_micros": 1,
+      "epoch_config_ref": "epoch/v2",
+      "output_schema_id": "bio-sc.v1"
+    },
+    "signals": {
+      "semantic_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "phys_hir_signature_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "dependency_merkle_root": null
+    },
+    "expected_topic_id_hex": "1bfc9ff78aff763ed3b38b37dc9787f485de0dc7fd1dc0b4ca0c20b771f3f1c8"
+  },
+  {
+    "name": "all_signals",
+    "metadata": {
+      "lane": "chem",
+      "alpha_micros": 999999,
+      "epoch_config_ref": "cfg/x",
+      "output_schema_id": "chem-sc.v2"
+    },
+    "signals": {
+      "semantic_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "phys_hir_signature_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "dependency_merkle_root": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "expected_topic_id_hex": "8a589ee7a015ea9a823db5058d3d4d745402e30624458c0ac0daf415eaa5e1be"
+  }
+]

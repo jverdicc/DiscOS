@@ -6,7 +6,10 @@ UPSTREAM_REPO="https://github.com/jverdicc/EvidenceOS.git"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-cargo metadata --format-version 1 > "$TMP_DIR/metadata.json"
+if ! cargo metadata --format-version 1 > "$TMP_DIR/metadata.json"; then
+  echo "failed to load cargo metadata; ensure evidenceos-protocol dependency is resolvable" >&2
+  exit 1
+fi
 
 PROTO_FROM_DEP="$(python - <<'PY' "$TMP_DIR/metadata.json"
 import json
@@ -22,7 +25,7 @@ for pkg in meta.get('packages', []):
         print(proto)
         break
 else:
-    raise SystemExit('evidenceos-protocol package not found in cargo metadata')
+    raise SystemExit('ERROR: evidenceos-protocol dependency package not found in cargo metadata')
 PY
 )"
 

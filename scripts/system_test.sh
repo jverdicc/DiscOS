@@ -8,54 +8,36 @@ TS="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_DIR="artifacts/system-test/${TS}"
 DATA_DIR="${OUT_DIR}/data"
 LOG_FILE="${OUT_DIR}/daemon.log"
-TEST_LOG="${OUT_DIR}/test.log"
-READY_LOG="${OUT_DIR}/readiness.log"
-SUMMARY="${OUT_DIR}/summary.txt"
 
-mkdir -p "${DATA_DIR}"
+mkdir -p "${DATA_DIR}" "${OUT_DIR}"
 
-echo "[system-test] daemon binary: ${BIN}"
-echo "[system-test] daemon addr:   ${ADDR}"
-echo "[system-test] output dir:    ${OUT_DIR}"
-
-"${BIN}" --listen "${LISTEN}" --etl-path "${DATA_DIR}/etl.log" >"${LOG_FILE}" 2>&1 &
+"${BIN}" --listen "${LISTEN}" --data-dir "${DATA_DIR}" >"${LOG_FILE}" 2>&1 &
 DAEMON_PID=$!
+trap 'kill ${DAEMON_PID} >/dev/null 2>&1 || true; wait ${DAEMON_PID} >/dev/null 2>&1 || true' EXIT
 
-cleanup() {
-  if kill -0 "${DAEMON_PID}" 2>/dev/null; then
-    kill "${DAEMON_PID}" || true
-    wait "${DAEMON_PID}" || true
-  fi
-}
-trap cleanup EXIT
-
-READY=0
-for i in $(seq 1 60); do
-  if cargo run --quiet -p discos-cli -- --endpoint "${ADDR}" health >"${READY_LOG}" 2>&1; then
-    READY=1
+for _ in $(seq 1 60); do
+  if cargo run --quiet -p discos-cli -- --endpoint "${ADDR}" health >"${OUT_DIR}/health.json" 2>&1; then
     break
   fi
   sleep 1
 done
 
-if [[ "${READY}" -ne 1 ]]; then
-  echo "[system-test] ERROR: daemon did not become ready at ${ADDR} within timeout" | tee -a "${SUMMARY}"
-  echo "[system-test] readiness output:" | tee -a "${SUMMARY}"
-  cat "${READY_LOG}" | tee -a "${SUMMARY}"
-  exit 1
-fi
+cargo run --quiet -p discos-cli -- --endpoint "${ADDR}" claim create \
+  --claim-name claim-a --alpha-micros 50000 --lane cbrn --epoch-config-ref epoch/v1 \
+  --holdout-ref holdout/default --epoch-size 1 --oracle-num-symbols 1 --access-credit 1 \
+  >"${OUT_DIR}/create_a.json"
+CLAIM_A="$(python - <<'PY' "${OUT_DIR}/create_a.json"
+import json,sys
+print(json.loads(open(sys.argv[1]).read())['claim_id'])
+PY
+)"
 
-set +e
-cargo test -p discos-client --test e2e_against_daemon_v2 -- --ignored | tee "${TEST_LOG}"
-TEST_RC=${PIPESTATUS[0]}
-set -e
+cargo run --quiet -p discos-cli -- --endpoint "${ADDR}" claim commit --claim-id "${CLAIM_A}" --wasm .discos/claims/claim-a/wasm.bin --manifests .discos/claims/claim-a/alpha_hir.json .discos/claims/claim-a/phys_hir.json .discos/claims/claim-a/causal_dsl.json >"${OUT_DIR}/commit_a.json"
+cargo run --quiet -p discos-cli -- --endpoint "${ADDR}" claim freeze --claim-id "${CLAIM_A}" >"${OUT_DIR}/freeze_a.json"
+cargo run --quiet -p discos-cli -- --endpoint "${ADDR}" claim seal --claim-id "${CLAIM_A}" >"${OUT_DIR}/seal_a.json"
+cargo run --quiet -p discos-cli -- --endpoint "${ADDR}" claim execute --claim-id "${CLAIM_A}" >"${OUT_DIR}/execute_a.json"
+cargo run --quiet -p discos-cli -- --endpoint "${ADDR}" claim fetch-capsule --claim-id "${CLAIM_A}" --verify-etl >"${OUT_DIR}/fetch_a.json"
 
-if [[ "${TEST_RC}" -ne 0 ]]; then
-  echo "[system-test] FAIL: ignored daemon e2e test failed (exit=${TEST_RC})" | tee "${SUMMARY}"
-else
-  echo "[system-test] PASS: ignored daemon e2e test passed" | tee "${SUMMARY}"
-fi
+cargo test -p discos-client --test e2e_against_daemon_v2 -- --ignored >"${OUT_DIR}/daemon_contract_test.log"
 
-echo "[system-test] logs: ${OUT_DIR}" | tee -a "${SUMMARY}"
-
-exit "${TEST_RC}"
+echo "system test outputs at ${OUT_DIR}" > "${OUT_DIR}/summary.txt"

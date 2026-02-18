@@ -208,19 +208,12 @@ impl DiscosClient {
             .map_err(|e| ClientError::Kernel(e.to_string()))
     }
 
-    pub async fn get_public_key(&mut self) -> Result<Vec<u8>, ClientError> {
-        self.get_signed_tree_head(pb::GetSignedTreeHeadRequest::default())
+    pub async fn get_public_key(&mut self) -> Result<pb::GetPublicKeyResponse, ClientError> {
+        self.inner
+            .get_public_key(pb::GetPublicKeyRequest {})
             .await
-            .map(|_| Vec::new())
-            .and_then(|v| {
-                if v.is_empty() {
-                    Err(ClientError::Kernel(
-                        "server public key endpoint unavailable in current protocol".to_string(),
-                    ))
-                } else {
-                    Ok(v)
-                }
-            })
+            .map(|r| r.into_inner())
+            .map_err(|e| ClientError::Kernel(e.to_string()))
     }
 }
 
