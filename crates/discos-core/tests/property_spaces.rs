@@ -1,9 +1,12 @@
+#[cfg(feature = "sim")]
 use discos_core::{
     boundary::{accuracy_value_det, generate_boundary},
     labels::LocalLabelsOracle,
+};
+use discos_core::{
     structured_claims::{
-        validate_cbrn_claim, Analyte, CbrnStructuredClaim, Decision, QuantizedValue, ReasonCode,
-        Scale, SiUnit,
+        validate_cbrn_claim, CbrnStructuredClaim, ClaimKind, Decision, Domain, EnvelopeCheck,
+        Profile, QuantityKind, QuantizedValue, ReasonCode, Scale, SchemaVersion, SiUnit,
     },
     topicid::{compute_topic_id, ClaimMetadata, TopicSignals},
 };
@@ -35,27 +38,36 @@ proptest! {
 
     #[test]
     fn structured_claim_validation_exercises_enums_and_bounds(
-        analyte in prop_oneof![Just(Analyte::Nh3), Just(Analyte::Cl2), Just(Analyte::Hcn)],
-        decision in prop_oneof![Just(Decision::Pass), Just(Decision::Fail), Just(Decision::Unknown)],
-        scale in prop_oneof![Just(Scale::Nano), Just(Scale::Micro), Just(Scale::Milli), Just(Scale::Base)],
-        unit in prop_oneof![Just(SiUnit::MolPerM3), Just(SiUnit::Ppm), Just(SiUnit::Ppb)],
+        decision in prop_oneof![Just(Decision::Pass), Just(Decision::Heavy), Just(Decision::Reject), Just(Decision::Escalate)],
+        scale in prop_oneof![Just(Scale::Nano), Just(Scale::Micro), Just(Scale::Milli), Just(Scale::Unit)],
+        unit in prop_oneof![Just(SiUnit::MolPerM3), Just(SiUnit::BqPerM3), Just(SiUnit::KgPerM3)],
         reason_count in 1usize..4,
-        confidence in 0u16..=10_000,
-        value_q in -10000i32..10000,
+        value_q in 0i64..10000,
     ) {
-        let reasons = vec![ReasonCode::SensorAgreement; reason_count];
+        let reasons = if matches!(decision, Decision::Heavy | Decision::Escalate) {
+            vec![ReasonCode::AboveThreshold; reason_count]
+        } else {
+            vec![ReasonCode::SensorAgreement; reason_count]
+        };
         let claim = CbrnStructuredClaim {
-            schema_id: "cbrn-sc.v1".into(),
-            analyte,
-            concentration: QuantizedValue { value_q, scale },
-            unit,
-            confidence_pct_x100: confidence,
+            schema_version: SchemaVersion::V1_0_0,
+            profile: Profile::CbrnSc,
+            domain: Domain::Cbrn,
+            claim_kind: ClaimKind::Assessment,
+            quantities: vec![QuantizedValue { quantity_kind: QuantityKind::Concentration, value_q, scale, unit }],
+            envelope_id: [1u8; 32],
+            envelope_check: EnvelopeCheck::Match,
+            references: vec![[2u8; 32]],
+            etl_root: [3u8; 32],
+            envelope_manifest_hash: [4u8; 32],
+            envelope_manifest_version: 1,
             decision,
             reason_codes: reasons,
         };
         prop_assert!(validate_cbrn_claim(&claim).is_ok());
     }
 
+    #[cfg(feature = "sim")]
     #[test]
     fn boundary_and_labels_oracles_cover_ranges(
         seed in any::<u64>(),
