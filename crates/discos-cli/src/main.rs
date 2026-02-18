@@ -265,6 +265,7 @@ async fn main() -> anyhow::Result<()> {
                         alpha_micros,
                         epoch_config_ref: epoch_config_ref.clone(),
                         output_schema_id,
+                        epoch_size,
                     },
                     TopicSignals {
                         semantic_hash: None,

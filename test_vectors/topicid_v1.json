@@ -1,0 +1,103 @@
+{
+  "version": "topicid_v1",
+  "domain": "evidenceos/topicid/v1",
+  "encoding": "len-prefix strings + be u32 + optional32 tags",
+  "vectors": [
+    {
+      "name": "minimal_no_optional_hashes",
+      "metadata": {
+        "lane": "cbrn",
+        "alpha_micros": 50000,
+        "epoch_config_ref": "epoch/v1",
+        "output_schema_id": "cbrn-sc.v1",
+        "epoch_size": 10000
+      },
+      "signals": {
+        "semantic_hash_hex": null,
+        "phys_hir_signature_hash_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+        "dependency_merkle_root_hex": null
+      },
+      "expected_topic_id_hex": "d3c2fc37f12143098dba21d0fb73a723be9016c7de7f6fa8073dc76caa773d1b"
+    },
+    {
+      "name": "all_fields_present",
+      "metadata": {
+        "lane": "biohazard/edge-7",
+        "alpha_micros": 1,
+        "epoch_config_ref": "epoch/v1.2.3",
+        "output_schema_id": "evidence.schema/claims/v1",
+        "epoch_size": 32
+      },
+      "signals": {
+        "semantic_hash_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "phys_hir_signature_hash_hex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "dependency_merkle_root_hex": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "expected_topic_id_hex": "a44ba2fcbec65ce43a709378db1d7392bbdcf2c8229d98784daf9a77f532dc3d"
+    },
+    {
+      "name": "boundary_low_values",
+      "metadata": {
+        "lane": "a",
+        "alpha_micros": 0,
+        "epoch_config_ref": "e",
+        "output_schema_id": "schema.min",
+        "epoch_size": 0
+      },
+      "signals": {
+        "semantic_hash_hex": null,
+        "phys_hir_signature_hash_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "dependency_merkle_root_hex": null
+      },
+      "expected_topic_id_hex": "ea5ffe01c68b230027a43085b913c1ff0bfd2725925ae5000496fe954c2d2876"
+    },
+    {
+      "name": "boundary_high_values",
+      "metadata": {
+        "lane": "lane-max",
+        "alpha_micros": 4294967295,
+        "epoch_config_ref": "epoch/max",
+        "output_schema_id": "schema.max.v9",
+        "epoch_size": 4294967295
+      },
+      "signals": {
+        "semantic_hash_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "phys_hir_signature_hash_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+        "dependency_merkle_root_hex": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expected_topic_id_hex": "214962f027422a6cc4e8f7f7bf9bc7feacf9eeb53382c54afe7afefaad6523d5"
+    },
+    {
+      "name": "output_schema_variant_a",
+      "metadata": {
+        "lane": "chem",
+        "alpha_micros": 250000,
+        "epoch_config_ref": "epoch/rollup",
+        "output_schema_id": "schema.alpha.v1",
+        "epoch_size": 128
+      },
+      "signals": {
+        "semantic_hash_hex": null,
+        "phys_hir_signature_hash_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "dependency_merkle_root_hex": null
+      },
+      "expected_topic_id_hex": "1c11b11d6fc8fe6834ee61177952666f7cc19ab08d71463f1d11c0e664f41f21"
+    },
+    {
+      "name": "output_schema_variant_b",
+      "metadata": {
+        "lane": "chem",
+        "alpha_micros": 250000,
+        "epoch_config_ref": "epoch/rollup",
+        "output_schema_id": "schema.beta.v1",
+        "epoch_size": 128
+      },
+      "signals": {
+        "semantic_hash_hex": null,
+        "phys_hir_signature_hash_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "dependency_merkle_root_hex": null
+      },
+      "expected_topic_id_hex": "ee205b03dcfec5f70214ae4176e211f5a0a1555b8c92c331112d88c2560a341b"
+    }
+  ]
+}
