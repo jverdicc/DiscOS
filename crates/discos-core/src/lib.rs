@@ -10,3 +10,7 @@
 
 pub mod boundary;
 pub mod labels;
+
+pub mod popper;
+pub mod structured_claims;
+pub mod topicid;
