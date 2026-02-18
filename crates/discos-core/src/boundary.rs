@@ -233,11 +233,9 @@ pub async fn attacker_ternary_evidenceos(
         let a2 = oracles.accuracy_oracle(x2).await?;
         q += 2;
 
-        if a1.is_none() || a2.is_none() {
+        let (Some(a1), Some(a2)) = (a1, a2) else {
             break;
-        }
-        let a1 = a1.unwrap();
-        let a2 = a2.unwrap();
+        };
 
         if a1 < a2 {
             lo = x1;
@@ -268,6 +266,7 @@ pub async fn attacker_ternary_evidenceos(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
 
@@ -314,6 +313,67 @@ mod tests {
         assert!(accuracy_value_det(dbg.x_submit, b) > 0.999);
     }
 
+    #[tokio::test]
+    async fn attacker_ternary_evidenceos_handles_oracle_none_without_panic() -> anyhow::Result<()> {
+        #[derive(Debug)]
+        struct NoneAccuracyOracle;
+
+        #[async_trait]
+        impl BudgetedBoundaryOracles for NoneAccuracyOracle {
+            async fn accuracy_oracle(&mut self, _x: f64) -> anyhow::Result<Option<u32>> {
+                Ok(None)
+            }
+
+            async fn safety_oracle(&mut self, _x: f64) -> anyhow::Result<Option<u32>> {
+                Ok(None)
+            }
+
+            fn num_buckets(&self) -> u32 {
+                256
+            }
+
+            fn bits_per_acc_query(&self) -> f64 {
+                8.0
+            }
+
+            fn joint_bits_budget(&self) -> f64 {
+                128.0
+            }
+
+            fn bits_spent(&self) -> f64 {
+                0.0
+            }
+
+            fn frozen(&self) -> bool {
+                false
+            }
+
+            fn acc_queries(&self) -> u64 {
+                0
+            }
+
+            fn safe_queries(&self) -> u64 {
+                0
+            }
+        }
+
+        let mut none_acc = NoneAccuracyOracle;
+        let dbg = attacker_ternary_evidenceos(&mut none_acc, 60, 2e-4, 0.999).await;
+        assert!(dbg.is_ok());
+        if let Ok(dbg) = dbg {
+            assert!(dbg.safety_response.is_none());
+        }
+
+        let mut exhausted = LocalEvidenceOsBoundaryOracles::new(0.42, 256, 0.0)?;
+        let dbg = attacker_ternary_evidenceos(&mut exhausted, 60, 2e-4, 0.999).await;
+        assert!(dbg.is_ok());
+        if let Ok(dbg) = dbg {
+            assert!(dbg.safety_response.is_none());
+            assert!(dbg.frozen);
+        }
+
+        Ok(())
+    }
     #[tokio::test]
     async fn ternary_evidenceos_runs() {
         let b = 0.42;
