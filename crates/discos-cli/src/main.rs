@@ -17,8 +17,9 @@ use discos_client::{
 };
 use discos_core::{
     structured_claims::{
-        canonicalize_cbrn_claim, validate_cbrn_claim, Analyte, CbrnStructuredClaim, Decision,
-        QuantizedValue, ReasonCode, Scale, SiUnit,
+        canonicalize_cbrn_claim, validate_cbrn_claim, CbrnStructuredClaim, ClaimKind, Decision,
+        Domain, EnvelopeCheck, Profile, QuantityKind, QuantizedValue, ReasonCode, Scale,
+        SchemaVersion, SiUnit,
     },
     topicid::{compute_topic_id, ClaimMetadata, TopicSignals},
 };
@@ -275,14 +276,22 @@ async fn main() -> anyhow::Result<()> {
                 );
 
                 let c = CbrnStructuredClaim {
-                    schema_id: "cbrn-sc.v1".into(),
-                    analyte: Analyte::Nh3,
-                    concentration: QuantizedValue {
+                    schema_version: SchemaVersion::V1_0_0,
+                    profile: Profile::CbrnSc,
+                    domain: Domain::Cbrn,
+                    claim_kind: ClaimKind::Assessment,
+                    quantities: vec![QuantizedValue {
+                        quantity_kind: QuantityKind::Concentration,
                         value_q: 500,
                         scale: Scale::Micro,
-                    },
-                    unit: SiUnit::MolPerM3,
-                    confidence_pct_x100: 9000,
+                        unit: SiUnit::MolPerM3,
+                    }],
+                    envelope_id: [0u8; 32],
+                    envelope_check: EnvelopeCheck::Match,
+                    references: vec![],
+                    etl_root: [0u8; 32],
+                    envelope_manifest_hash: [0u8; 32],
+                    envelope_manifest_version: 1,
                     decision: Decision::Pass,
                     reason_codes: vec![ReasonCode::SensorAgreement],
                 };
