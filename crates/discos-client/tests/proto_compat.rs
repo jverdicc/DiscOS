@@ -59,3 +59,39 @@ fn descriptor_contains_required_v2_rpcs() {
 
     let _has_get_public_key = methods.contains("evidenceos.v1.EvidenceOS.GetPublicKey");
 }
+
+#[test]
+fn claim_id_fields_are_bytes_on_v2_surface() {
+    let descriptors = FileDescriptorSet::decode(evidenceos_protocol::FILE_DESCRIPTOR_SET)
+        .expect("decode embedded file descriptor set");
+
+    let mut field_types = std::collections::BTreeMap::new();
+    for file in descriptors.file {
+        for message in file.message_type {
+            let message_name = message.name.unwrap_or_default();
+            for field in message.field {
+                if field.name.as_deref() == Some("claim_id") {
+                    field_types.insert(message_name.clone(), field.r#type);
+                }
+            }
+        }
+    }
+
+    let expected_bytes = Some(prost_types::field_descriptor_proto::Type::Bytes as i32);
+    for message in [
+        "CreateClaimResponse",
+        "CreateClaimV2Response",
+        "CommitArtifactsRequest",
+        "FreezeGatesRequest",
+        "SealClaimRequest",
+        "ExecuteClaimV2Request",
+        "FetchCapsuleRequest",
+        "RevokeClaimRequest",
+    ] {
+        assert_eq!(
+            field_types.get(message).copied(),
+            expected_bytes,
+            "{message}.claim_id must be bytes",
+        );
+    }
+}
