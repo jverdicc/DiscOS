@@ -3,12 +3,13 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
-use std::{fs, path::PathBuf};
+use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use discos_builder::{
-    build_restricted_wasm, manifest_hash, AlphaHIRManifest, CausalDSLManifest, PhysHIRManifest,
+    build_restricted_wasm, manifest_hash, sha256, AlphaHIRManifest, CausalDSLManifest,
+    PhysHIRManifest,
 };
 use discos_client::{
     pb, verify_consistency, verify_inclusion, verify_sth_signature, ConsistencyProof, DiscosClient,
@@ -23,6 +24,19 @@ use discos_core::{
 };
 use tokio_stream::StreamExt;
 use tracing_subscriber::EnvFilter;
+
+const CACHE_FILE_NAME: &str = "sth_cache.json";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+struct CachedSth {
+    tree_size: u64,
+    root_hash: [u8; 32],
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+struct SthCache {
+    entries: HashMap<String, CachedSth>,
+}
 
 #[derive(Debug, Parser)]
 #[command(name = "discos")]
@@ -118,6 +132,67 @@ fn hex_decode_bytes(s: &str) -> anyhow::Result<Vec<u8>> {
 
 fn claim_dir(claim_id: &str) -> PathBuf {
     PathBuf::from(".discos").join("claims").join(claim_id)
+}
+
+fn cache_key(endpoint: &str, kernel_pubkey_hex: &str) -> String {
+    if kernel_pubkey_hex.is_empty() {
+        endpoint.to_owned()
+    } else {
+        format!("{endpoint}#{kernel_pubkey_hex}")
+    }
+}
+
+fn cache_dir() -> PathBuf {
+    if let Some(p) = std::env::var_os("XDG_CACHE_HOME") {
+        PathBuf::from(p).join("discos")
+    } else if let Some(home) = std::env::var_os("HOME") {
+        PathBuf::from(home).join(".cache").join("discos")
+    } else {
+        std::env::temp_dir().join("discos")
+    }
+}
+
+fn cache_file_path() -> PathBuf {
+    cache_dir().join(CACHE_FILE_NAME)
+}
+
+fn load_sth_cache(path: &Path) -> anyhow::Result<SthCache> {
+    if !path.exists() {
+        return Ok(SthCache::default());
+    }
+    let bytes = fs::read(path).with_context(|| format!("read cache {}", path.display()))?;
+    Ok(serde_json::from_slice(&bytes).context("parse sth cache json")?)
+}
+
+fn persist_sth_cache(path: &Path, cache: &SthCache) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("create cache dir {}", parent.display()))?;
+    }
+    let data = serde_json::to_vec_pretty(cache)?;
+    fs::write(path, data).with_context(|| format!("write cache {}", path.display()))?;
+    Ok(())
+}
+
+fn wasm_hash_for_bytes(wasm_bytes: &[u8]) -> [u8; 32] {
+    sha256(wasm_bytes)
+}
+
+fn verify_consistency_with_cache(
+    cache: &mut SthCache,
+    key: &str,
+    new_sth: CachedSth,
+    consistency: &ConsistencyProof,
+) -> anyhow::Result<Option<bool>> {
+    let consistency_ok = if let Some(old_sth) = cache.entries.get(key) {
+        let ok = verify_consistency(old_sth.root_hash, new_sth.root_hash, consistency);
+        anyhow::ensure!(ok, "consistency proof verification failed for cached STH");
+        Some(ok)
+    } else {
+        None
+    };
+    cache.entries.insert(key.to_owned(), new_sth);
+    Ok(consistency_ok)
 }
 
 #[tokio::main]
@@ -257,7 +332,7 @@ async fn main() -> anyhow::Result<()> {
                 let resp = client
                     .commit_artifacts(pb::CommitArtifactsRequest {
                         claim_id,
-                        wasm_hash: discos_builder::build_restricted_wasm().code_hash.to_vec(),
+                        wasm_hash: wasm_hash_for_bytes(&wasm_bytes).to_vec(),
                         wasm_module: wasm_bytes,
                         manifests: artifact_manifests,
                     })
@@ -288,6 +363,10 @@ async fn main() -> anyhow::Result<()> {
                     .fetch_capsule(pb::FetchCapsuleRequest { claim_id })
                     .await?;
                 if verify_etl {
+                    let cache_path = cache_file_path();
+                    let cache_entry_key = cache_key(&args.endpoint, &args.kernel_pubkey_hex);
+                    let mut cache = load_sth_cache(&cache_path)?;
+
                     let root: [u8; 32] = resp
                         .etl_root_hash
                         .clone()
@@ -318,7 +397,24 @@ async fn main() -> anyhow::Result<()> {
                             .collect::<anyhow::Result<Vec<[u8; 32]>>>()?,
                     };
                     let inclusion_ok = verify_inclusion(root, &inclusion);
-                    let consistency_ok = verify_consistency(root, root, &consistency);
+
+                    anyhow::ensure!(inclusion_ok, "inclusion proof verification failed");
+
+                    let consistency_ok = match verify_consistency_with_cache(
+                        &mut cache,
+                        &cache_entry_key,
+                        CachedSth {
+                            tree_size: resp.etl_tree_size,
+                            root_hash: root,
+                        },
+                        &consistency,
+                    )? {
+                        Some(ok) => ok,
+                        None => {
+                            println!("no prior STH cached; skipping consistency check");
+                            false
+                        }
+                    };
 
                     if !args.kernel_pubkey_hex.is_empty() {
                         let pubkey = hex_decode_bytes(&args.kernel_pubkey_hex)?;
@@ -333,6 +429,9 @@ async fn main() -> anyhow::Result<()> {
                         };
                         verify_sth_signature(&sth, &pubkey)?;
                     }
+
+                    persist_sth_cache(&cache_path, &cache)?;
+
                     println!(
                         "{}",
                         serde_json::json!({"capsule_len": resp.capsule.len(), "inclusion_ok": inclusion_ok, "consistency_ok": consistency_ok})
@@ -361,4 +460,72 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use discos_client::{merkle_leaf_hash, ConsistencyProof};
+
+    fn merkle_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
+        let mut material = Vec::with_capacity(65);
+        material.push(0x01);
+        material.extend_from_slice(&left);
+        material.extend_from_slice(&right);
+        discos_builder::sha256(&material)
+    }
+
+    #[test]
+    fn sth_cache_first_run_stores_and_skips_consistency_then_second_run_verifies() {
+        let dir = tempfile::tempdir().expect("tempdir should create");
+        let cache_path = dir.path().join(CACHE_FILE_NAME);
+        let key = "http://127.0.0.1:50051";
+
+        let l0 = merkle_leaf_hash(b"a");
+        let l1 = merkle_leaf_hash(b"b");
+        let l2 = merkle_leaf_hash(b"c");
+
+        let old_root = merkle_node_hash(l0, l1);
+        let new_root = merkle_node_hash(old_root, l2);
+
+        let proof = ConsistencyProof {
+            old_tree_size: 2,
+            new_tree_size: 3,
+            path: vec![old_root, l2],
+        };
+
+        let mut cache = load_sth_cache(&cache_path).expect("cache should load when missing");
+        let first = verify_consistency_with_cache(
+            &mut cache,
+            key,
+            CachedSth {
+                tree_size: 2,
+                root_hash: old_root,
+            },
+            &proof,
+        )
+        .expect("first run should not fail");
+        assert_eq!(first, None);
+        persist_sth_cache(&cache_path, &cache).expect("first cache write should succeed");
+
+        let mut second_cache = load_sth_cache(&cache_path).expect("cache reload should succeed");
+        let second = verify_consistency_with_cache(
+            &mut second_cache,
+            key,
+            CachedSth {
+                tree_size: 3,
+                root_hash: new_root,
+            },
+            &proof,
+        )
+        .expect("second run should verify consistency proof");
+        assert_eq!(second, Some(true));
+    }
+
+    #[test]
+    fn commit_wasm_hash_matches_sha256_of_exact_file_bytes() {
+        let wasm_bytes = b"exact wasm bytes from file";
+        let expected = discos_builder::sha256(wasm_bytes);
+        assert_eq!(wasm_hash_for_bytes(wasm_bytes), expected);
+    }
 }
