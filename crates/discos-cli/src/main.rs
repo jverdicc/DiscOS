@@ -261,12 +261,14 @@ async fn main() -> anyhow::Result<()> {
             }
             ClaimCommand::Seal { claim_id } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
-                let resp = client.seal(pb::SealRequest { claim_id }).await?;
+                let resp = client.seal_claim(pb::SealClaimRequest { claim_id }).await?;
                 println!("{}", serde_json::json!({"sealed": resp.sealed}));
             }
             ClaimCommand::Execute { claim_id } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
-                let resp = client.execute(pb::ExecuteRequest { claim_id }).await?;
+                let resp = client
+                    .execute_claim(pb::ExecuteClaimRequest { claim_id })
+                    .await?;
                 println!(
                     "{}",
                     serde_json::json!({"executed": resp.executed, "execution_id": resp.execution_id})
@@ -318,7 +320,11 @@ async fn main() -> anyhow::Result<()> {
                         let sth = SignedTreeHead {
                             tree_size: resp.etl_tree_size,
                             root_hash: root,
-                            signature: resp.sth_signature.clone(),
+                            signature: resp
+                                .sth_signature
+                                .clone()
+                                .try_into()
+                                .context("sth signature must be 64 bytes")?,
                         };
                         verify_sth_signature(&sth, &pubkey)?;
                     }
