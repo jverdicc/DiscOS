@@ -151,4 +151,54 @@ mod tests {
         let submitted = report.attempts.iter().filter(|a| a.submitted).count();
         assert_eq!(submitted, 3);
     }
+    #[tokio::test]
+    async fn empty_candidates_returns_empty_report() {
+        let labels = vec![1u8; 16];
+        let mut oracle = LocalLabelsOracle::new(labels, 8, 0.0).expect("oracle creation succeeds");
+        let report = run_popper(&[], &mut oracle, &PopperConfig::default()).await;
+        assert!(report.attempts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn all_below_proxy_threshold_are_rejected_without_submission() {
+        let labels = vec![1u8; 16];
+        let mut oracle = LocalLabelsOracle::new(labels, 8, 0.0).expect("oracle creation succeeds");
+        let report = run_popper(
+            &[("a".to_string(), 0.1), ("b".to_string(), 0.2)],
+            &mut oracle,
+            &PopperConfig::default(),
+        )
+        .await;
+        assert!(report.attempts.iter().all(|a| !a.submitted));
+        assert!(report
+            .attempts
+            .iter()
+            .all(|a| a.rejection_reason.as_deref() == Some("below_proxy_threshold")));
+    }
+
+    #[tokio::test]
+    async fn deterministic_for_same_inputs() {
+        let labels = vec![1u8; 32];
+        let candidates = (0..5).map(|i| (format!("c{i}"), 0.9)).collect::<Vec<_>>();
+        let config = PopperConfig {
+            max_submissions: 2,
+            n_labels: 32,
+            ..Default::default()
+        };
+
+        let mut oracle_a =
+            LocalLabelsOracle::new(labels.clone(), 8, 0.0).expect("oracle creation succeeds");
+        let mut oracle_b =
+            LocalLabelsOracle::new(labels, 8, 0.0).expect("oracle creation succeeds");
+
+        let ra = run_popper(&candidates, &mut oracle_a, &config).await;
+        let rb = run_popper(&candidates, &mut oracle_b, &config).await;
+        assert_eq!(ra.attempts.len(), rb.attempts.len());
+        for (a, b) in ra.attempts.iter().zip(rb.attempts.iter()) {
+            assert_eq!(a.candidate_id, b.candidate_id);
+            assert_eq!(a.submitted, b.submitted);
+            assert_eq!(a.certified, b.certified);
+            assert_eq!(a.rejection_reason, b.rejection_reason);
+        }
+    }
 }

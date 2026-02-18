@@ -305,4 +305,47 @@ mod tests {
         assert!(second.frozen);
         assert_eq!(second.k_bits_total, first.k_bits_total);
     }
+    #[tokio::test]
+    async fn e_value_below_and_above_null_behave_monotonically() {
+        let mut o = LocalLabelsOracle::new(vec![0, 1, 0, 1], 8, 0.0)
+            .expect("oracle creation succeeds")
+            .with_null_accuracy(0.75);
+
+        let low = o
+            .query_accuracy(&[0, 0, 0, 0])
+            .await
+            .expect("low query succeeds");
+        let high = o
+            .query_accuracy(&[0, 1, 0, 1])
+            .await
+            .expect("high query succeeds");
+
+        assert!(low.raw_accuracy < 0.75);
+        assert!(low.e_value < 1.0);
+        assert!(high.e_value > 1.0);
+    }
+
+    #[tokio::test]
+    async fn hysteresis_applies_only_for_local_probes() {
+        let labels = vec![0, 1, 0, 1, 0, 1, 0, 1];
+        let mut o = LocalLabelsOracle::new(labels, 64, 0.2).expect("oracle creation succeeds");
+
+        let base = o
+            .query_accuracy(&[0, 0, 0, 0, 0, 0, 0, 0])
+            .await
+            .expect("base query succeeds");
+
+        let local = o
+            .query_accuracy(&[1, 0, 0, 0, 0, 0, 0, 0])
+            .await
+            .expect("local query succeeds");
+        assert!(local.hysteresis_applied);
+        assert_eq!(local.bucket, base.bucket);
+
+        let non_local = o
+            .query_accuracy(&[1, 1, 1, 1, 1, 1, 1, 1])
+            .await
+            .expect("non-local query succeeds");
+        assert!(!non_local.hysteresis_applied);
+    }
 }
