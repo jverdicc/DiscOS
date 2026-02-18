@@ -8,6 +8,7 @@ members = [
   "crates/discos-cli",
   "crates/discos-client",
   "crates/discos-builder",
+  "crates/evidenceos-core",
   "crates/evidenceos-protocol",
 ]
 
@@ -16,3 +17,6 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/<your-org>/DiscOS"
+
+[workspace.dependencies]
+evidenceos-protocol = { git = "https://github.com/jverdicc/EvidenceOS.git", rev = "3f8b95a6615874d80526e447cb33ad0396b079f4" }

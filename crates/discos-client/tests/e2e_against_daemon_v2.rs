@@ -141,6 +141,30 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
             .ok_or_else(|| Status::not_found("claim not found"))?;
         if !claim.frozen {
             return Err(Status::failed_precondition("claim must be frozen first"));
+trait ClaimIdAsBytes {
+    fn as_bytes_slice(&self) -> &[u8];
+}
+
+impl ClaimIdAsBytes for String {
+    fn as_bytes_slice(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+impl ClaimIdAsBytes for Vec<u8> {
+    fn as_bytes_slice(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+fn claim_id_as_bytes<T: ClaimIdAsBytes>(claim_id: &T) -> &[u8] {
+    claim_id.as_bytes_slice()
+}
+
+fn parse_hash_bytes(raw: &Value) -> Option<Vec<u8>> {
+    if let Some(v) = raw.as_str() {
+        if let Ok(bytes) = hex::decode(v) {
+            return Some(bytes);
         }
         claim.sealed = true;
         Ok(Response::new(pb::SealClaimResponse { sealed: true }))
@@ -602,6 +626,38 @@ async fn claim_lifecycle_v2_against_daemon() {
             .collect(),
     };
     let etl_root: [u8; 32] = capsule
+
+    let _ = canonical_output_matches_capsule(
+        &exec.canonical_output,
+        &capsule.capsule,
+        claim_id_as_bytes(&create.claim_id),
+        &create.topic_id,
+    );
+
+    if let Some(inclusion) = capsule.inclusion {
+        if let Ok(leaf_hash) = inclusion.leaf_hash.clone().try_into() {
+            let proof = InclusionProof {
+                leaf_hash,
+                leaf_index: inclusion.leaf_index,
+                tree_size: inclusion.tree_size,
+                audit_path: inclusion
+                    .audit_path
+                    .into_iter()
+                    .filter_map(|x| x.try_into().ok())
+                    .collect(),
+            };
+            let _ = verify_inclusion_proof(leaf_hash, &proof);
+            let _ = verify_inclusion(
+                capsule
+                    .etl_root_hash
+                    .clone()
+                    .try_into()
+                    .unwrap_or([0u8; 32]),
+                &proof,
+            );
+        }
+    }
+    let etl_root_hash: [u8; 32] = capsule
         .etl_root_hash
         .clone()
         .try_into()
