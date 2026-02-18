@@ -279,4 +279,74 @@ mod tests {
         c.concentration.value_q = -1;
         assert!(validate_cbrn_claim(&c).is_err());
     }
+    #[test]
+    fn heavy_requires_threshold_reason() {
+        let mut c = sample();
+        c.decision = Decision::Heavy;
+        c.reason_codes = vec![ReasonCode::SensorAgreement];
+        assert!(validate_cbrn_claim(&c).is_err());
+
+        c.reason_codes.push(ReasonCode::AboveThreshold);
+        assert!(validate_cbrn_claim(&c).is_ok());
+    }
+
+    #[test]
+    fn rejects_more_than_eight_reason_codes() {
+        let mut c = sample();
+        c.reason_codes = vec![
+            ReasonCode::SensorAgreement,
+            ReasonCode::AboveThreshold,
+            ReasonCode::BelowThreshold,
+            ReasonCode::IncompleteInputs,
+            ReasonCode::MagnitudeEnvelopeExceeded,
+            ReasonCode::CalibrationExpired,
+            ReasonCode::LineageTainted,
+            ReasonCode::StructuralAnomalyDetected,
+            ReasonCode::AboveThreshold,
+        ];
+        assert!(validate_cbrn_claim(&c).is_err());
+    }
+
+    #[test]
+    fn discriminants_are_stable() {
+        assert_eq!(Scale::Unit.discriminant(), 0);
+        assert_eq!(SiUnit::MolPerM3.discriminant(), 0);
+        assert_eq!(Decision::Escalate.discriminant(), 3);
+        assert_eq!(Analyte::Unknown.discriminant(), 8);
+        assert_eq!(ReasonCode::StructuralAnomalyDetected.discriminant(), 7);
+    }
+
+    #[test]
+    fn canonical_bytes_change_on_any_field_change() {
+        let c = sample();
+        let base = canonicalize_cbrn_claim(&c).unwrap_or_default();
+
+        let mut changed = c.clone();
+        changed.analyte = Analyte::Cl2;
+        assert_ne!(base, canonicalize_cbrn_claim(&changed).unwrap_or_default());
+
+        changed = c.clone();
+        changed.concentration.value_q += 1;
+        assert_ne!(base, canonicalize_cbrn_claim(&changed).unwrap_or_default());
+
+        changed = c.clone();
+        changed.concentration.scale = Scale::Nano;
+        assert_ne!(base, canonicalize_cbrn_claim(&changed).unwrap_or_default());
+
+        changed = c.clone();
+        changed.unit = SiUnit::GrayPerSec;
+        assert_ne!(base, canonicalize_cbrn_claim(&changed).unwrap_or_default());
+
+        changed = c.clone();
+        changed.confidence_pct_x100 -= 1;
+        assert_ne!(base, canonicalize_cbrn_claim(&changed).unwrap_or_default());
+
+        changed = c.clone();
+        changed.decision = Decision::Reject;
+        assert_ne!(base, canonicalize_cbrn_claim(&changed).unwrap_or_default());
+
+        changed = c;
+        changed.reason_codes = vec![ReasonCode::CalibrationExpired];
+        assert_ne!(base, canonicalize_cbrn_claim(&changed).unwrap_or_default());
+    }
 }

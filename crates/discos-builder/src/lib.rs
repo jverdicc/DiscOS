@@ -1,3 +1,8 @@
+#![cfg_attr(
+    not(test),
+    deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
+)]
+
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use wasm_encoder::{

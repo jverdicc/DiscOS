@@ -113,15 +113,24 @@ pub struct TopicBudgetLedger {
 
 impl TopicBudgetLedger {
     pub fn new(default_budget_bits: f64) -> Self {
+        let sanitized_default = if default_budget_bits.is_sign_negative() {
+            0.0
+        } else {
+            default_budget_bits
+        };
         Self {
             budgets: HashMap::new(),
-            default_budget_bits,
+            default_budget_bits: sanitized_default,
         }
     }
 
     pub fn get_or_create(&mut self, topic_id: [u8; 32]) -> &mut TopicBudget {
-        self.budgets.entry(topic_id).or_insert_with(|| {
-            TopicBudget::new(topic_id, self.default_budget_bits).expect("budget validated")
+        let default_budget_bits = self.default_budget_bits;
+        self.budgets.entry(topic_id).or_insert(TopicBudget {
+            topic_id,
+            k_bits_budget: default_budget_bits,
+            k_bits_spent: 0.0,
+            frozen: false,
         })
     }
 
@@ -183,15 +192,7 @@ pub fn compute_topic_id(metadata: &ClaimMetadata, signals: TopicSignals) -> Topi
     material.extend_from_slice(&payload);
 
     let mut escalation_reason = None;
-    if let (Some(semantic_hash), Some(dep_root)) =
-        (signals.semantic_hash, signals.dependency_merkle_root)
-    {
-        let mut consensus_material = Vec::with_capacity(96);
-        consensus_material.extend_from_slice(&semantic_hash);
-        consensus_material.extend_from_slice(&signals.phys_hir_signature_hash);
-        consensus_material.extend_from_slice(&dep_root);
-        let _consensus_hash = sha256(&consensus_material);
-
+    if let Some(semantic_hash) = signals.semantic_hash {
         let distance = hamming_distance_bytes(&semantic_hash, &signals.phys_hir_signature_hash);
         if distance > 100 {
             escalation_reason = Some(EscalationReason::SemanticPhysHirDisagreement);
@@ -322,5 +323,48 @@ mod tests {
             computed.escalation_reason,
             Some(EscalationReason::SemanticPhysHirDisagreement)
         );
+    }
+    #[test]
+    fn topic_id_changes_for_each_signal_field() {
+        let (m, mut s) = sample();
+        s.semantic_hash = Some([9u8; 32]);
+        s.dependency_merkle_root = Some([8u8; 32]);
+        let base = compute_topic_id(&m, s.clone());
+
+        let mut s_sem = s.clone();
+        s_sem.semantic_hash = Some([7u8; 32]);
+        assert_ne!(base.topic_id, compute_topic_id(&m, s_sem).topic_id);
+
+        let mut s_phys = s.clone();
+        s_phys.phys_hir_signature_hash[0] ^= 0xAA;
+        assert_ne!(base.topic_id, compute_topic_id(&m, s_phys).topic_id);
+
+        let mut s_dep = s;
+        s_dep.dependency_merkle_root = Some([7u8; 32]);
+        assert_ne!(base.topic_id, compute_topic_id(&m, s_dep).topic_id);
+    }
+
+    #[test]
+    fn multi_signal_escalation_without_dependency_root() {
+        let (m, mut s) = sample();
+        s.semantic_hash = Some([0u8; 32]);
+        s.phys_hir_signature_hash = [0xffu8; 32];
+        s.dependency_merkle_root = None;
+        let computed = compute_topic_id(&m, s);
+        assert!(computed.escalate_to_heavy);
+    }
+
+    #[test]
+    fn topic_budgeting_scales_across_many_identities() {
+        let mut ledger = TopicBudgetLedger::new(5.0);
+        for i in 0..64u8 {
+            let mut id = [0u8; 32];
+            id[0] = i;
+            assert_eq!(ledger.charge(id, 1.0), Ok(4.0));
+            assert_eq!(ledger.charge(id, 4.0), Ok(0.0));
+            assert!(ledger.charge(id, 0.1).is_err());
+            assert!(ledger.is_frozen(&id));
+        }
+        assert_eq!(ledger.topic_count(), 64);
     }
 }

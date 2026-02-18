@@ -21,8 +21,15 @@ impl LikelihoodRatioE {
     }
 
     pub fn compute(&self, observed_accuracy: f64) -> f64 {
-        if self.null_accuracy == 0.0 || observed_accuracy == 0.0 {
+        if !observed_accuracy.is_finite() || !(0.0..=1.0).contains(&observed_accuracy) {
             return 0.0;
+        }
+        if self.null_accuracy == 0.0 {
+            return if observed_accuracy == 0.0 {
+                1.0
+            } else {
+                f64::MAX
+            };
         }
         let ratio = observed_accuracy / self.null_accuracy;
         ratio.powf(self.n_observations as f64).clamp(0.0, f64::MAX)
@@ -96,6 +103,20 @@ pub fn e_merge_sequential(e_values: &[f64], weights: Option<&[f64]>) -> Result<f
     Ok(weighted / sum_w)
 }
 
+pub fn e_merge_product(e_values: &[f64]) -> Result<f64, String> {
+    if e_values.is_empty() {
+        return Err("e_values must be non-empty".to_string());
+    }
+    let mut out = 1.0;
+    for e in e_values {
+        if !e.is_finite() || *e < 0.0 {
+            return Err("e_values must be finite and >= 0".to_string());
+        }
+        out = (out * *e).clamp(0.0, f64::MAX);
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,5 +133,19 @@ mod tests {
         let _ = b.update(1).expect("update succeeds");
         b.reset();
         assert_eq!(b.wealth(), 1.0);
+    }
+    #[test]
+    fn lr_rejects_invalid_observed_accuracy() {
+        let lr = LikelihoodRatioE::new(0.5, 4).expect("lr config is valid");
+        assert_eq!(lr.compute(-0.1), 0.0);
+        assert_eq!(lr.compute(1.1), 0.0);
+    }
+
+    #[test]
+    fn e_merge_product_and_weighted_average_validate_inputs() {
+        assert!(e_merge_product(&[]).is_err());
+        assert!(e_merge_product(&[1.0, -1.0]).is_err());
+        assert_eq!(e_merge_product(&[2.0, 3.0]).unwrap_or_default(), 6.0);
+        assert!(e_merge_sequential(&[1.0, 2.0], Some(&[1.0])).is_err());
     }
 }

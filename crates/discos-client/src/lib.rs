@@ -1,3 +1,8 @@
+#![cfg_attr(
+    not(test),
+    deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
+)]
+
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -203,6 +208,14 @@ pub struct ConsistencyProof {
     pub path: Vec<[u8; 32]>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignedRevocation {
+    pub claim_id: String,
+    pub reason_code: String,
+    pub logical_epoch: u64,
+    pub signature: [u8; 64],
+}
+
 pub fn sha256(input: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(input);
@@ -224,7 +237,7 @@ fn merkle_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
     sha256(&material)
 }
 
-pub fn verify_inclusion(root: [u8; 32], proof: &InclusionProof) -> bool {
+pub fn verify_inclusion_proof(root: [u8; 32], proof: &InclusionProof) -> bool {
     if proof.tree_size == 0 || proof.leaf_index >= proof.tree_size {
         return false;
     }
@@ -242,7 +255,7 @@ pub fn verify_inclusion(root: [u8; 32], proof: &InclusionProof) -> bool {
     hash == root
 }
 
-pub fn verify_consistency(
+pub fn verify_consistency_proof(
     old_root: [u8; 32],
     new_root: [u8; 32],
     proof: &ConsistencyProof,
@@ -294,6 +307,18 @@ pub fn verify_consistency(
     fr == old_root && sr == new_root
 }
 
+pub fn verify_inclusion(root: [u8; 32], proof: &InclusionProof) -> bool {
+    verify_inclusion_proof(root, proof)
+}
+
+pub fn verify_consistency(
+    old_root: [u8; 32],
+    new_root: [u8; 32],
+    proof: &ConsistencyProof,
+) -> bool {
+    verify_consistency_proof(old_root, new_root, proof)
+}
+
 pub fn verify_sth_signature(sth: &SignedTreeHead, kernel_pubkey: &[u8]) -> Result<(), ClientError> {
     if kernel_pubkey.len() != 32 {
         return Err(ClientError::InvalidInput(
@@ -317,6 +342,37 @@ pub fn verify_sth_signature(sth: &SignedTreeHead, kernel_pubkey: &[u8]) -> Resul
     pubkey
         .verify(&sign_bytes, &signature)
         .map_err(|_| ClientError::VerificationFailed("invalid STH signature".into()))
+}
+
+pub fn verify_revocation_signature(
+    revocation: &SignedRevocation,
+    kernel_pubkey: &[u8],
+) -> Result<(), ClientError> {
+    if kernel_pubkey.len() != 32 {
+        return Err(ClientError::InvalidInput(
+            "ed25519 pubkey must be 32 bytes".into(),
+        ));
+    }
+
+    let pubkey = VerifyingKey::from_bytes(
+        kernel_pubkey
+            .try_into()
+            .map_err(|_| ClientError::InvalidInput("ed25519 pubkey must be 32 bytes".into()))?,
+    )
+    .map_err(|e| ClientError::InvalidInput(format!("invalid ed25519 pubkey: {e}")))?;
+
+    let signature = Signature::from_bytes(&revocation.signature);
+
+    let mut sign_bytes = Vec::new();
+    sign_bytes.extend_from_slice(&(revocation.claim_id.len() as u32).to_be_bytes());
+    sign_bytes.extend_from_slice(revocation.claim_id.as_bytes());
+    sign_bytes.extend_from_slice(&(revocation.reason_code.len() as u32).to_be_bytes());
+    sign_bytes.extend_from_slice(revocation.reason_code.as_bytes());
+    sign_bytes.extend_from_slice(&revocation.logical_epoch.to_be_bytes());
+
+    pubkey
+        .verify(&sign_bytes, &signature)
+        .map_err(|_| ClientError::VerificationFailed("invalid revocation signature".into()))
 }
 
 #[cfg(test)]
@@ -359,7 +415,7 @@ mod tests {
             tree_size: 2,
             audit_path: vec![leaves[1]],
         };
-        assert!(verify_inclusion(root, &proof));
+        assert!(verify_inclusion_proof(root, &proof));
     }
 
     #[test]
@@ -376,7 +432,7 @@ mod tests {
             new_tree_size: 3,
             path: vec![old_root, l2],
         };
-        assert!(verify_consistency(old_root, new_root, &proof));
+        assert!(verify_consistency_proof(old_root, new_root, &proof));
     }
 
     #[test]
@@ -394,7 +450,7 @@ mod tests {
             new_tree_size: 3,
             path: bad_path,
         };
-        assert!(!verify_consistency(old_root, new_root, &proof));
+        assert!(!verify_consistency_proof(old_root, new_root, &proof));
     }
 
     #[test]
@@ -423,5 +479,59 @@ mod tests {
         let mut flipped_sig = sth.clone();
         flipped_sig.signature[0] ^= 1;
         assert!(verify_sth_signature(&flipped_sig, sk.verifying_key().as_bytes()).is_err());
+    }
+    #[test]
+    fn inclusion_proof_works_for_three_and_four_leaves() {
+        let leaves3 = [b"a".as_slice(), b"b".as_slice(), b"c".as_slice()]
+            .into_iter()
+            .map(merkle_leaf_hash)
+            .collect::<Vec<_>>();
+        let root3 = root(&[b"a", b"b", b"c"]);
+        let proof3 = InclusionProof {
+            leaf_hash: leaves3[0],
+            leaf_index: 0,
+            tree_size: 3,
+            audit_path: vec![leaves3[1], leaves3[2]],
+        };
+        assert!(verify_inclusion_proof(root3, &proof3));
+
+        let leaves4 = [b"a", b"b", b"c", b"d"]
+            .iter()
+            .map(|x| merkle_leaf_hash(x))
+            .collect::<Vec<_>>();
+        let left = merkle_node_hash(leaves4[0], leaves4[1]);
+        let right = merkle_node_hash(leaves4[2], leaves4[3]);
+        let root4 = merkle_node_hash(left, right);
+        let proof4 = InclusionProof {
+            leaf_hash: leaves4[3],
+            leaf_index: 3,
+            tree_size: 4,
+            audit_path: vec![leaves4[2], left],
+        };
+        assert!(verify_inclusion_proof(root4, &proof4));
+    }
+
+    #[test]
+    fn revocation_signature_roundtrip_and_tamper() {
+        let sk = SigningKey::from_bytes(&[9u8; 32]);
+        let mut sign_bytes = Vec::new();
+        sign_bytes.extend_from_slice(&5u32.to_be_bytes());
+        sign_bytes.extend_from_slice(b"claim");
+        sign_bytes.extend_from_slice(&7u32.to_be_bytes());
+        sign_bytes.extend_from_slice(b"expired");
+        sign_bytes.extend_from_slice(&11u64.to_be_bytes());
+        let sig = sk.sign(&sign_bytes);
+
+        let rev = SignedRevocation {
+            claim_id: "claim".to_string(),
+            reason_code: "expired".to_string(),
+            logical_epoch: 11,
+            signature: sig.to_bytes(),
+        };
+        assert!(verify_revocation_signature(&rev, sk.verifying_key().as_bytes()).is_ok());
+
+        let mut bad = rev.clone();
+        bad.reason_code = "other".to_string();
+        assert!(verify_revocation_signature(&bad, sk.verifying_key().as_bytes()).is_err());
     }
 }
