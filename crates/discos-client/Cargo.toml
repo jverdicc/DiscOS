@@ -16,3 +16,4 @@ evidenceos-protocol = { path = "../evidenceos-protocol" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+prost-types = "0.13"
