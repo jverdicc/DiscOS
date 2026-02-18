@@ -8,9 +8,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-pub mod pb {
-    tonic::include_proto!("evidenceos.v1");
-}
+pub use evidenceos_protocol::pb;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCode {
