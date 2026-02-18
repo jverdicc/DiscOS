@@ -7,6 +7,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      EVIDENCEOS_REV: 3f8b95a6615874d80526e447cb33ad0396b079f4
     steps:
       - uses: actions/checkout@v4
 
@@ -14,6 +16,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+
+      - name: Verify EvidenceOS proto sync
+        run: ./scripts/check_evidenceos_proto_sync.sh
 
       - name: Rustfmt
         run: cargo fmt --all -- --check
@@ -27,6 +32,8 @@ jobs:
 
   system:
     runs-on: ubuntu-latest
+    env:
+      EVIDENCEOS_REV: 3f8b95a6615874d80526e447cb33ad0396b079f4
     steps:
       - uses: actions/checkout@v4
 
@@ -37,7 +44,7 @@ jobs:
         run: |
           git clone https://github.com/jverdicc/EvidenceOS.git ../EvidenceOS
           cd ../EvidenceOS
-          git checkout 3f8b95a6615874d80526e447cb33ad0396b079f4
+          git checkout "$EVIDENCEOS_REV"
 
       - name: Build evidenceos-daemon
         run: cargo build --manifest-path ../EvidenceOS/Cargo.toml --bin evidenceos-daemon --release

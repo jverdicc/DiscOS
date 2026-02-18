@@ -14,6 +14,26 @@ struct GetPublicKeyResponse {
     pub public_key: Vec<u8>,
 }
 
+trait ClaimIdAsBytes {
+    fn as_bytes_slice(&self) -> &[u8];
+}
+
+impl ClaimIdAsBytes for String {
+    fn as_bytes_slice(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+impl ClaimIdAsBytes for Vec<u8> {
+    fn as_bytes_slice(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+fn claim_id_as_bytes<T: ClaimIdAsBytes>(claim_id: &T) -> &[u8] {
+    claim_id.as_bytes_slice()
+}
+
 fn parse_hash_bytes(raw: &Value) -> Option<Vec<u8>> {
     if let Some(v) = raw.as_str() {
         if let Ok(bytes) = hex::decode(v) {
@@ -145,7 +165,7 @@ async fn claim_lifecycle_v2_against_daemon() {
     let _ = canonical_output_matches_capsule(
         &exec.canonical_output,
         &capsule.capsule,
-        create.claim_id.as_bytes(),
+        claim_id_as_bytes(&create.claim_id),
         &create.topic_id,
     );
 
