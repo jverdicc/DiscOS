@@ -37,6 +37,15 @@ service EvidenceOS {
 
   // Read ETL (append-only log) root.
   rpc GetEtlRoot(GetEtlRootRequest) returns (GetEtlRootResponse);
+
+  // Claim lifecycle APIs used by DiscOS.
+  rpc CreateClaim(CreateClaimRequest) returns (CreateClaimResponse);
+  rpc CommitArtifacts(CommitArtifactsRequest) returns (CommitArtifactsResponse);
+  rpc Seal(SealRequest) returns (SealResponse);
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+  rpc FetchCapsule(FetchCapsuleRequest) returns (FetchCapsuleResponse);
+  rpc VerifyEtlProofs(VerifyEtlProofsRequest) returns (VerifyEtlProofsResponse);
+  rpc WatchRevocations(WatchRevocationsRequest) returns (stream RevocationEvent);
 }
 
 message HealthRequest {}
@@ -179,4 +188,111 @@ message GetEtlRootRequest {}
 message GetEtlRootResponse {
   string root_hash_hex = 1;
   uint64 tree_size = 2;
+}
+
+message ClaimMetadata {
+  string lane = 1;
+  uint32 alpha_micros = 2;
+  string epoch_config_ref = 3;
+  string output_schema_id = 4;
+}
+
+message TopicSignals {
+  bytes semantic_hash = 1;
+  bytes phys_hir_signature_hash = 2;
+  bytes dependency_merkle_root = 3;
+}
+
+message CreateClaimRequest {
+  string claim_id = 1;
+  ClaimMetadata metadata = 2;
+  TopicSignals signals = 3;
+}
+
+message CreateClaimResponse {
+  string claim_id = 1;
+  bytes topic_id = 2;
+}
+
+message ArtifactManifest {
+  string name = 1;
+  bytes canonical_bytes = 2;
+  bytes digest = 3;
+}
+
+message CommitArtifactsRequest {
+  string claim_id = 1;
+  bytes wasm_module = 2;
+  bytes wasm_hash = 3;
+  repeated ArtifactManifest manifests = 4;
+}
+
+message CommitArtifactsResponse {
+  bool accepted = 1;
+}
+
+message SealRequest {
+  string claim_id = 1;
+}
+
+message SealResponse {
+  bool sealed = 1;
+}
+
+message ExecuteRequest {
+  string claim_id = 1;
+}
+
+message ExecuteResponse {
+  bool executed = 1;
+  string execution_id = 2;
+}
+
+message FetchCapsuleRequest {
+  string claim_id = 1;
+}
+
+message MerkleInclusionProof {
+  bytes leaf_hash = 1;
+  uint64 leaf_index = 2;
+  uint64 tree_size = 3;
+  repeated bytes audit_path = 4;
+}
+
+message MerkleConsistencyProof {
+  uint64 old_tree_size = 1;
+  uint64 new_tree_size = 2;
+  repeated bytes path = 3;
+}
+
+message FetchCapsuleResponse {
+  string claim_id = 1;
+  bytes capsule = 2;
+  uint64 etl_index = 3;
+  uint64 etl_tree_size = 4;
+  bytes etl_root_hash = 5;
+  bytes sth_signature = 6;
+  MerkleInclusionProof inclusion = 7;
+  MerkleConsistencyProof consistency = 8;
+}
+
+message VerifyEtlProofsRequest {
+  bytes root_hash = 1;
+  MerkleInclusionProof inclusion = 2;
+  MerkleConsistencyProof consistency = 3;
+  uint64 trusted_tree_size = 4;
+  bytes trusted_root_hash = 5;
+}
+
+message VerifyEtlProofsResponse {
+  bool inclusion_ok = 1;
+  bool consistency_ok = 2;
+}
+
+message WatchRevocationsRequest {}
+
+message RevocationEvent {
+  string claim_id = 1;
+  string reason_code = 2;
+  uint64 logical_epoch = 3;
 }

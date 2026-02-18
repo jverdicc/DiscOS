@@ -5,13 +5,18 @@ use clap::{Parser, Subcommand};
 use discos_builder::{
     build_restricted_wasm, manifest_hash, AlphaHIRManifest, CausalDSLManifest, PhysHIRManifest,
 };
-use discos_client::DiscosClient;
+use discos_client::{
+    pb, verify_consistency, verify_inclusion, verify_sth_signature, ConsistencyProof, DiscosClient,
+    InclusionProof, SignedTreeHead,
+};
 use discos_core::{
     structured_claims::{
-        canonicalize_cbrn_claim, validate_cbrn_claim, CbrnStructuredClaim, QuantizedValue, Scale,
+        canonicalize_cbrn_claim, validate_cbrn_claim, Analyte, CbrnStructuredClaim, Decision,
+        QuantizedValue, ReasonCode, Scale, SiUnit,
     },
     topicid::{compute_topic_id, ClaimMetadata, TopicSignals},
 };
+use tokio_stream::StreamExt;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
@@ -22,6 +27,8 @@ struct Args {
     endpoint: String,
     #[arg(long, default_value = "info")]
     log: String,
+    #[arg(long, env = "DISCOS_KERNEL_PUBKEY_HEX", default_value = "")]
+    kernel_pubkey_hex: String,
     #[command(subcommand)]
     cmd: Command,
 }
@@ -34,16 +41,11 @@ enum Command {
         cmd: ClaimCommand,
     },
     WatchRevocations,
-    #[cfg(feature = "sim")]
-    Attack {
-        #[command(subcommand)]
-        cmd: AttackCommand,
-    },
 }
 
 #[derive(Debug, Subcommand)]
 enum ClaimCommand {
-    New {
+    Create {
         #[arg(long)]
         claim_id: String,
         #[arg(long)]
@@ -51,39 +53,32 @@ enum ClaimCommand {
         #[arg(long)]
         lane: String,
         #[arg(long)]
-        holdout: String,
-        #[arg(long)]
         epoch_config_ref: String,
-    },
-    Build {
-        #[arg(long)]
-        claim_id: String,
         #[arg(long, default_value = "cbrn-sc.v1")]
         output_schema_id: String,
     },
-    Commit,
-    Seal,
-    Run,
+    Commit {
+        #[arg(long)]
+        claim_id: String,
+        #[arg(long)]
+        wasm: PathBuf,
+        #[arg(long)]
+        manifests: Vec<PathBuf>,
+    },
+    Seal {
+        #[arg(long)]
+        claim_id: String,
+    },
+    Execute {
+        #[arg(long)]
+        claim_id: String,
+    },
     FetchCapsule {
+        #[arg(long)]
+        claim_id: String,
         #[arg(long, default_value_t = false)]
         verify_etl: bool,
     },
-}
-
-#[derive(Debug, Subcommand)]
-enum AttackCommand {
-    Labels,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct ClaimStatus {
-    claim_id: String,
-    lane: String,
-    alpha_micros: u32,
-    holdout_handle: String,
-    epoch_config_ref: String,
-    topic_id: Option<String>,
-    built: bool,
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -94,6 +89,26 @@ fn hex_encode(bytes: &[u8]) -> String {
         s.push(HEX[(b & 0x0f) as usize] as char);
     }
     s
+}
+
+fn hex_decode_32(s: &str) -> anyhow::Result<[u8; 32]> {
+    let mut out = [0u8; 32];
+    let s = s.trim();
+    anyhow::ensure!(s.len() == 64, "expected 64-char hex hash");
+    for i in 0..32 {
+        out[i] = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).context("invalid hex")?;
+    }
+    Ok(out)
+}
+
+fn hex_decode_bytes(s: &str) -> anyhow::Result<Vec<u8>> {
+    let s = s.trim();
+    anyhow::ensure!(s.len() % 2 == 0, "hex length must be even");
+    let mut out = Vec::with_capacity(s.len() / 2);
+    for i in (0..s.len()).step_by(2) {
+        out.push(u8::from_str_radix(&s[i..i + 2], 16).context("invalid hex")?);
+    }
+    Ok(out)
 }
 
 fn claim_dir(claim_id: &str) -> PathBuf {
@@ -114,53 +129,31 @@ async fn main() -> anyhow::Result<()> {
             println!("{}", serde_json::json!({"status": health.status}));
         }
         Command::Claim { cmd } => match cmd {
-            ClaimCommand::New {
+            ClaimCommand::Create {
                 claim_id,
                 alpha_micros,
                 lane,
-                holdout,
                 epoch_config_ref,
-            } => {
-                let dir = claim_dir(&claim_id);
-                fs::create_dir_all(&dir)?;
-                let status = ClaimStatus {
-                    claim_id,
-                    lane,
-                    alpha_micros,
-                    holdout_handle: holdout,
-                    epoch_config_ref,
-                    topic_id: None,
-                    built: false,
-                };
-                fs::write(dir.join("status.json"), serde_json::to_vec_pretty(&status)?)?;
-                println!("{}", serde_json::json!({"ok": true, "path": dir}));
-            }
-            ClaimCommand::Build {
-                claim_id,
                 output_schema_id,
             } => {
                 let dir = claim_dir(&claim_id);
-                let status_path = dir.join("status.json");
-                let mut status: ClaimStatus = serde_json::from_slice(
-                    &fs::read(&status_path).context("missing claim status.json")?,
-                )?;
+                fs::create_dir_all(&dir)?;
 
                 let wasm = build_restricted_wasm();
                 fs::write(dir.join("wasm.bin"), &wasm.wasm_bytes)?;
-
                 let alpha = AlphaHIRManifest {
-                    plan_id: status.claim_id.clone(),
+                    plan_id: claim_id.clone(),
                     code_hash_hex: hex_encode(&wasm.code_hash),
                     oracle_kinds: vec!["oracle_query".into()],
                     output_schema_id: output_schema_id.clone(),
                     nullspec_id: "nullspec.v1".into(),
                 };
                 let phys = PhysHIRManifest {
-                    physical_signature_hash: hex_encode(&manifest_hash(&alpha)),
+                    physical_signature_hash: hex_encode(&manifest_hash(&alpha)?),
                     envelope_ids: vec!["env/default".into()],
                 };
                 let causal = CausalDSLManifest {
-                    dag_hash: hex_encode(&manifest_hash(&phys)),
+                    dag_hash: hex_encode(&manifest_hash(&phys)?),
                     adjustment_sets: vec![vec!["baseline".into()]],
                 };
                 fs::write(
@@ -173,98 +166,187 @@ async fn main() -> anyhow::Result<()> {
                     serde_json::to_vec_pretty(&causal)?,
                 )?;
 
+                let phys_hash = hex_decode_32(&phys.physical_signature_hash)?;
                 let topic = compute_topic_id(
                     &ClaimMetadata {
-                        lane: status.lane.clone(),
-                        alpha_micros: status.alpha_micros,
-                        epoch_config_ref: status.epoch_config_ref.clone(),
+                        lane: lane.clone(),
+                        alpha_micros,
+                        epoch_config_ref: epoch_config_ref.clone(),
                         output_schema_id,
                     },
                     TopicSignals {
                         semantic_hash: None,
-                        phys_hir_signature_hash: phys.physical_signature_hash.clone(),
+                        phys_hir_signature_hash: phys_hash,
                         dependency_merkle_root: None,
                     },
                 );
 
                 let c = CbrnStructuredClaim {
                     schema_id: "cbrn-sc.v1".into(),
-                    analyte_code: "NH3".into(),
+                    analyte: Analyte::Nh3,
                     concentration: QuantizedValue {
-                        value: 500,
+                        value_q: 500,
                         scale: Scale::Micro,
                     },
-                    unit_si: "mol/m3".into(),
+                    unit: SiUnit::MolPerM3,
                     confidence_pct_x100: 9000,
+                    decision: Decision::Pass,
+                    reason_codes: vec![ReasonCode::SensorAgreement],
                 };
                 validate_cbrn_claim(&c).context("constructed CBRN claim should validate")?;
                 fs::write(
                     dir.join("structured_claim.json"),
-                    canonicalize_cbrn_claim(&c),
+                    canonicalize_cbrn_claim(&c)?,
                 )?;
 
-                status.topic_id = Some(topic.topic_id.clone());
-                status.built = true;
-                fs::write(status_path, serde_json::to_vec_pretty(&status)?)?;
+                let mut client = DiscosClient::connect(&args.endpoint).await?;
+                let resp = client
+                    .create_claim(pb::CreateClaimRequest {
+                        claim_id: claim_id.clone(),
+                        metadata: Some(pb::ClaimMetadata {
+                            lane,
+                            alpha_micros,
+                            epoch_config_ref,
+                            output_schema_id: "cbrn-sc.v1".into(),
+                        }),
+                        signals: Some(pb::TopicSignals {
+                            semantic_hash: vec![],
+                            phys_hir_signature_hash: topic.signals.phys_hir_signature_hash.to_vec(),
+                            dependency_merkle_root: vec![],
+                        }),
+                    })
+                    .await?;
                 println!(
                     "{}",
-                    serde_json::json!({"topic_id": topic.topic_id, "signals": topic.signals})
+                    serde_json::json!({"claim_id": resp.claim_id, "topic_id": hex_encode(&resp.topic_id), "local_topic_id": topic.topic_id_hex })
                 );
             }
-            ClaimCommand::Commit => {
+            ClaimCommand::Commit {
+                claim_id,
+                wasm,
+                manifests,
+            } => {
+                let wasm_bytes =
+                    fs::read(&wasm).with_context(|| format!("read wasm {}", wasm.display()))?;
+                let artifact_manifests = manifests
+                    .iter()
+                    .map(|p| {
+                        let bytes = fs::read(p)
+                            .with_context(|| format!("read manifest {}", p.display()))?;
+                        let digest = manifest_hash(
+                            &serde_json::from_slice::<serde_json::Value>(&bytes)
+                                .context("manifest should be json")?,
+                        )?;
+                        Ok(pb::ArtifactManifest {
+                            name: p
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string(),
+                            canonical_bytes: bytes,
+                            digest: digest.to_vec(),
+                        })
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?;
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
-                let err = client
-                    .commit_artifacts()
-                    .await
-                    .err()
-                    .map(|e| format!("{}::{:?}", e, e.code()));
-                println!("{}", serde_json::json!({"ok": false, "kernel": err}));
+                let resp = client
+                    .commit_artifacts(pb::CommitArtifactsRequest {
+                        claim_id,
+                        wasm_hash: discos_builder::build_restricted_wasm().code_hash.to_vec(),
+                        wasm_module: wasm_bytes,
+                        manifests: artifact_manifests,
+                    })
+                    .await?;
+                println!("{}", serde_json::json!({"accepted": resp.accepted}));
             }
-            ClaimCommand::Seal => {
+            ClaimCommand::Seal { claim_id } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
-                let err = client
-                    .seal_claim()
-                    .await
-                    .err()
-                    .map(|e| format!("{}::{:?}", e, e.code()));
-                println!("{}", serde_json::json!({"ok": false, "kernel": err}));
+                let resp = client.seal(pb::SealRequest { claim_id }).await?;
+                println!("{}", serde_json::json!({"sealed": resp.sealed}));
             }
-            ClaimCommand::Run => {
+            ClaimCommand::Execute { claim_id } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
-                let err = client
-                    .execute_claim()
-                    .await
-                    .err()
-                    .map(|e| format!("{}::{:?}", e, e.code()));
-                println!("{}", serde_json::json!({"ok": false, "kernel": err}));
-            }
-            ClaimCommand::FetchCapsule { verify_etl } => {
-                let mut client = DiscosClient::connect(&args.endpoint).await?;
-                let sth = client.get_sth().await?;
+                let resp = client.execute(pb::ExecuteRequest { claim_id }).await?;
                 println!(
                     "{}",
-                    serde_json::json!({"verify_etl": verify_etl, "sth": sth})
+                    serde_json::json!({"executed": resp.executed, "execution_id": resp.execution_id})
                 );
+            }
+            ClaimCommand::FetchCapsule {
+                claim_id,
+                verify_etl,
+            } => {
+                let mut client = DiscosClient::connect(&args.endpoint).await?;
+                let resp = client
+                    .fetch_capsule(pb::FetchCapsuleRequest { claim_id })
+                    .await?;
+                if verify_etl {
+                    let root: [u8; 32] = resp
+                        .etl_root_hash
+                        .clone()
+                        .try_into()
+                        .context("etl root hash must be 32 bytes")?;
+                    let inclusion = resp.inclusion.context("missing inclusion proof")?;
+                    let inclusion = InclusionProof {
+                        leaf_hash: inclusion
+                            .leaf_hash
+                            .try_into()
+                            .context("leaf hash must be 32 bytes")?,
+                        leaf_index: inclusion.leaf_index,
+                        tree_size: inclusion.tree_size,
+                        audit_path: inclusion
+                            .audit_path
+                            .into_iter()
+                            .map(|n| n.try_into().context("audit path node must be 32 bytes"))
+                            .collect::<anyhow::Result<Vec<[u8; 32]>>>()?,
+                    };
+                    let consistency = resp.consistency.context("missing consistency proof")?;
+                    let consistency = ConsistencyProof {
+                        old_tree_size: consistency.old_tree_size,
+                        new_tree_size: consistency.new_tree_size,
+                        path: consistency
+                            .path
+                            .into_iter()
+                            .map(|n| n.try_into().context("consistency node must be 32 bytes"))
+                            .collect::<anyhow::Result<Vec<[u8; 32]>>>()?,
+                    };
+                    let inclusion_ok = verify_inclusion(root, &inclusion);
+                    let consistency_ok = verify_consistency(root, root, &consistency);
+
+                    if !args.kernel_pubkey_hex.is_empty() {
+                        let pubkey = hex_decode_bytes(&args.kernel_pubkey_hex)?;
+                        let sth = SignedTreeHead {
+                            tree_size: resp.etl_tree_size,
+                            root_hash: root,
+                            signature: resp.sth_signature.clone(),
+                        };
+                        verify_sth_signature(&sth, &pubkey)?;
+                    }
+                    println!(
+                        "{}",
+                        serde_json::json!({"capsule_len": resp.capsule.len(), "inclusion_ok": inclusion_ok, "consistency_ok": consistency_ok})
+                    );
+                } else {
+                    println!(
+                        "{}",
+                        serde_json::json!({"capsule_len": resp.capsule.len(), "etl_index": resp.etl_index})
+                    );
+                }
             }
         },
         Command::WatchRevocations => {
             let mut client = DiscosClient::connect(&args.endpoint).await?;
-            let err = client
-                .get_revocation_feed()
-                .await
-                .err()
-                .map(|e| format!("{}::{:?}", e, e.code()));
-            println!("{}", serde_json::json!({"ok": false, "kernel": err}));
-        }
-        #[cfg(feature = "sim")]
-        Command::Attack { cmd } => match cmd {
-            AttackCommand::Labels => {
+            let mut stream = client
+                .watch_revocations(pb::WatchRevocationsRequest {})
+                .await?;
+            while let Some(ev) = stream.next().await {
+                let ev = ev?;
                 println!(
                     "{}",
-                    serde_json::json!({"mode":"sim", "attack":"labels", "status":"placeholder"})
+                    serde_json::json!({"claim_id": ev.claim_id, "reason_code": ev.reason_code, "logical_epoch": ev.logical_epoch})
                 );
             }
-        },
+        }
     }
 
     Ok(())

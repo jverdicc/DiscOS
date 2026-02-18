@@ -5,46 +5,75 @@ pub enum Scale {
     Unit,
     Milli,
     Micro,
+    Nano,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SiUnit {
+    MolPerM3,
+    KgPerM3,
+    BqPerM3,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Decision {
+    Pass,
+    Heavy,
+    Reject,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Analyte {
+    Nh3,
+    Cl2,
+    Cs137,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ReasonCode {
+    SensorAgreement,
+    AboveThreshold,
+    BelowThreshold,
+    IncompleteInputs,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct QuantizedValue {
-    pub value: i64,
+    pub value_q: i64,
     pub scale: Scale,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CbrnStructuredClaim {
     pub schema_id: String,
-    pub analyte_code: String,
+    pub analyte: Analyte,
     pub concentration: QuantizedValue,
-    pub unit_si: String,
+    pub unit: SiUnit,
     pub confidence_pct_x100: u16,
+    pub decision: Decision,
+    pub reason_codes: Vec<ReasonCode>,
 }
 
 pub fn validate_cbrn_claim(claim: &CbrnStructuredClaim) -> Result<(), String> {
     if claim.schema_id != "cbrn-sc.v1" {
         return Err("unsupported schema_id".into());
     }
-    let unit_ok = matches!(claim.unit_si.as_str(), "mol/m3" | "kg/m3" | "Bq/m3");
-    if !unit_ok {
-        return Err("unit not in SI allowlist".into());
-    }
     if claim.confidence_pct_x100 > 10_000 {
         return Err("confidence out of range".into());
     }
-    if claim.analyte_code.is_empty() || claim.analyte_code.len() > 32 {
-        return Err("invalid analyte_code".into());
+    if claim.reason_codes.is_empty() {
+        return Err("at least one reason_code is required".into());
     }
     Ok(())
 }
 
-pub fn canonicalize_cbrn_claim(claim: &CbrnStructuredClaim) -> String {
-    serde_json::to_string(claim).expect("canonicalize claim")
+pub fn canonicalize_cbrn_claim(claim: &CbrnStructuredClaim) -> Result<String, serde_json::Error> {
+    serde_json::to_string(claim)
 }
 
-pub fn kout_bound_bits(_claim: &CbrnStructuredClaim) -> u32 {
-    32 + 16 + 8 + 2
+pub fn kout_bits(_claim: &CbrnStructuredClaim) -> u32 {
+    // analyte(2) + scale(2) + unit(2) + decision(2) + confidence(14) + reason(3 bits/item, max 4)
+    2 + 2 + 2 + 2 + 14 + 12
 }
 
 #[cfg(test)]
@@ -54,32 +83,36 @@ mod tests {
     fn sample() -> CbrnStructuredClaim {
         CbrnStructuredClaim {
             schema_id: "cbrn-sc.v1".into(),
-            analyte_code: "NH3".into(),
+            analyte: Analyte::Nh3,
             concentration: QuantizedValue {
-                value: 1200,
+                value_q: 1200,
                 scale: Scale::Micro,
             },
-            unit_si: "mol/m3".into(),
+            unit: SiUnit::MolPerM3,
             confidence_pct_x100: 9123,
+            decision: Decision::Pass,
+            reason_codes: vec![ReasonCode::SensorAgreement],
         }
     }
 
     #[test]
-    fn rejects_bad_unit_or_texty_payload() {
+    fn rejects_invalid_fields() {
         let mut c = sample();
-        c.unit_si = "free text".into();
+        c.schema_id = "bad".into();
         assert!(validate_cbrn_claim(&c).is_err());
     }
 
     #[test]
     fn canonicalization_stable() {
         let c = sample();
-        assert_eq!(canonicalize_cbrn_claim(&c), canonicalize_cbrn_claim(&c));
+        let a = canonicalize_cbrn_claim(&c).expect("serialize");
+        let b = canonicalize_cbrn_claim(&c).expect("serialize");
+        assert_eq!(a, b);
     }
 
     #[test]
-    fn kout_stable() {
+    fn kout_stable_fixture() {
         let c = sample();
-        assert_eq!(kout_bound_bits(&c), kout_bound_bits(&c));
+        assert_eq!(kout_bits(&c), 34);
     }
 }
