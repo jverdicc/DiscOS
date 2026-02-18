@@ -15,5 +15,10 @@ ed25519-dalek = "2"
 evidenceos-protocol = { path = "../evidenceos-protocol" }
 
 [dev-dependencies]
+base64 = "0.22"
+hex = "0.4"
+http = "1"
+prost = "0.13"
+serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 prost-types = "0.13"

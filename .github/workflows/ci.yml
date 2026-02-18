@@ -33,16 +33,25 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Checkout EvidenceOS (configurable placeholder)
+      - name: Checkout pinned EvidenceOS
         run: |
-          EVIDENCEOS_REPO="${EVIDENCEOS_REPO:-https://github.com/example/EvidenceOS.git}"
-          EVIDENCEOS_REF="${EVIDENCEOS_REF:-main}"
-          git clone --depth 1 --branch "$EVIDENCEOS_REF" "$EVIDENCEOS_REPO" ../EvidenceOS
+          git clone https://github.com/jverdicc/EvidenceOS.git ../EvidenceOS
+          cd ../EvidenceOS
+          git checkout 3f8b95a6615874d80526e447cb33ad0396b079f4
 
-      - name: Build daemon
-        run: cargo build --manifest-path ../EvidenceOS/Cargo.toml --bin evidenceos-daemon
+      - name: Build evidenceos-daemon
+        run: cargo build --manifest-path ../EvidenceOS/Cargo.toml --bin evidenceos-daemon --release
 
-      - name: Run DiscOS system tests
+      - name: Run system test script
         env:
           EVIDENCEOS_DAEMON_ADDR: http://127.0.0.1:50051
-        run: cargo test -p discos-client --test e2e_against_daemon_v2 -- --ignored
+          EVIDENCEOS_DAEMON_BIN: ${{ github.workspace }}/../EvidenceOS/target/release/evidenceos-daemon
+        run: ./scripts/system_test.sh
+
+      - name: Upload system test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-test-artifacts
+          path: artifacts/system-test/
+          if-no-files-found: warn
