@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
-const DOMAIN_TOPIC_ID: &[u8] = b"evidenceos/topic-id/v1";
+const DOMAIN_TOPIC_ID_V1: &[u8] = b"evidenceos/topicid/v1";
+const DOMAIN_TOPIC_ID_LEGACY_V1: &[u8] = b"evidenceos/topic-id/v1";
 
 pub fn sha256(input: &[u8]) -> [u8; 32] {
     let mut h = Sha256::new();
@@ -24,12 +25,34 @@ pub fn hex_encode_32(bytes: &[u8; 32]) -> String {
     hex_encode(bytes)
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TopicIdVersion {
+    LegacyV1,
+    V1,
+}
+
+impl Default for TopicIdVersion {
+    fn default() -> Self {
+        Self::V1
+    }
+}
+
+impl TopicIdVersion {
+    fn domain(self) -> &'static [u8] {
+        match self {
+            TopicIdVersion::LegacyV1 => DOMAIN_TOPIC_ID_LEGACY_V1,
+            TopicIdVersion::V1 => DOMAIN_TOPIC_ID_V1,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ClaimMetadata {
     pub lane: String,
     pub alpha_micros: u32,
     pub epoch_config_ref: String,
     pub output_schema_id: String,
+    pub epoch_size: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -170,6 +193,7 @@ fn canonical_topic_bytes(metadata: &ClaimMetadata, signals: &TopicSignals) -> Ve
     out.extend_from_slice(&metadata.alpha_micros.to_be_bytes());
     put_len_prefixed(&mut out, metadata.epoch_config_ref.as_bytes());
     put_len_prefixed(&mut out, metadata.output_schema_id.as_bytes());
+    out.extend_from_slice(&metadata.epoch_size.to_be_bytes());
 
     put_opt_hash(&mut out, &signals.semantic_hash);
     out.extend_from_slice(&signals.phys_hir_signature_hash);
@@ -184,10 +208,14 @@ fn hamming_distance_bytes(a: &[u8], b: &[u8]) -> u32 {
         .sum()
 }
 
-pub fn compute_topic_id(metadata: &ClaimMetadata, signals: TopicSignals) -> TopicComputation {
+pub fn compute_topic_id_with_version(
+    metadata: &ClaimMetadata,
+    signals: TopicSignals,
+    version: TopicIdVersion,
+) -> TopicComputation {
     let payload = canonical_topic_bytes(metadata, &signals);
-    let mut material = Vec::with_capacity(DOMAIN_TOPIC_ID.len() + 1 + payload.len());
-    material.extend_from_slice(DOMAIN_TOPIC_ID);
+    let mut material = Vec::with_capacity(version.domain().len() + 1 + payload.len());
+    material.extend_from_slice(version.domain());
     material.push(0);
     material.extend_from_slice(&payload);
 
@@ -209,9 +237,14 @@ pub fn compute_topic_id(metadata: &ClaimMetadata, signals: TopicSignals) -> Topi
     }
 }
 
+pub fn compute_topic_id(metadata: &ClaimMetadata, signals: TopicSignals) -> TopicComputation {
+    compute_topic_id_with_version(metadata, signals, TopicIdVersion::V1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Deserialize;
 
     fn sample() -> (ClaimMetadata, TopicSignals) {
         (
@@ -220,6 +253,7 @@ mod tests {
                 alpha_micros: 50_000,
                 epoch_config_ref: "epoch/v1".into(),
                 output_schema_id: "cbrn-sc.v1".into(),
+                epoch_size: 10_000,
             },
             TopicSignals {
                 semantic_hash: None,
@@ -227,6 +261,50 @@ mod tests {
                 dependency_merkle_root: None,
             },
         )
+    }
+
+    fn decode_hex32(hex: &str) -> [u8; 32] {
+        let trimmed = hex.trim();
+        assert_eq!(trimmed.len(), 64, "hex32 must be exactly 64 chars");
+        let mut out = [0u8; 32];
+        for (idx, chunk) in trimmed.as_bytes().chunks_exact(2).enumerate() {
+            let hi = (chunk[0] as char).to_digit(16).expect("valid hex") as u8;
+            let lo = (chunk[1] as char).to_digit(16).expect("valid hex") as u8;
+            out[idx] = (hi << 4) | lo;
+        }
+        out
+    }
+
+    #[derive(Deserialize)]
+    struct TopicVectorFile {
+        vectors: Vec<TopicVector>,
+    }
+
+    #[derive(Deserialize)]
+    struct TopicVector {
+        metadata: ClaimMetadata,
+        signals: TopicVectorSignals,
+        expected_topic_id_hex: String,
+    }
+
+    #[derive(Deserialize)]
+    struct TopicVectorSignals {
+        semantic_hash_hex: Option<String>,
+        phys_hir_signature_hash_hex: String,
+        dependency_merkle_root_hex: Option<String>,
+    }
+
+    impl TopicVectorSignals {
+        fn into_topic_signals(self) -> TopicSignals {
+            TopicSignals {
+                semantic_hash: self.semantic_hash_hex.as_deref().map(decode_hex32),
+                phys_hir_signature_hash: decode_hex32(&self.phys_hir_signature_hash_hex),
+                dependency_merkle_root: self
+                    .dependency_merkle_root_hex
+                    .as_deref()
+                    .map(decode_hex32),
+            }
+        }
     }
 
     #[test]
@@ -286,8 +364,13 @@ mod tests {
 
         m.alpha_micros = 50_000;
         m.epoch_config_ref = "epoch/v2".into();
-        let epoch = compute_topic_id(&m, s);
+        let epoch = compute_topic_id(&m, s.clone());
         assert_ne!(base.topic_id, epoch.topic_id);
+
+        m.epoch_config_ref = "epoch/v1".into();
+        m.epoch_size = 32;
+        let epoch_size = compute_topic_id(&m, s);
+        assert_ne!(base.topic_id, epoch_size.topic_id);
     }
 
     #[test]
@@ -366,5 +449,29 @@ mod tests {
             assert!(ledger.is_frozen(&id));
         }
         assert_eq!(ledger.topic_count(), 64);
+    }
+
+    #[test]
+    fn topic_id_v1_vectors_match_expected_hashes() {
+        let vectors: TopicVectorFile =
+            serde_json::from_str(include_str!("../../../test_vectors/topicid_v1.json"))
+                .expect("valid vector file");
+
+        for vector in vectors.vectors {
+            let got = compute_topic_id(&vector.metadata, vector.signals.into_topic_signals());
+            assert_eq!(
+                got.topic_id_hex, vector.expected_topic_id_hex,
+                "vector mismatch for lane={} output_schema_id={}",
+                vector.metadata.lane, vector.metadata.output_schema_id
+            );
+        }
+    }
+
+    #[test]
+    fn topic_id_version_distinguishes_legacy_domain_string() {
+        let (m, s) = sample();
+        let v1 = compute_topic_id_with_version(&m, s.clone(), TopicIdVersion::V1);
+        let legacy = compute_topic_id_with_version(&m, s, TopicIdVersion::LegacyV1);
+        assert_ne!(v1.topic_id, legacy.topic_id);
     }
 }
