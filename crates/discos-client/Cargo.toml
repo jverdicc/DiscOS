@@ -24,3 +24,7 @@ prost = "0.13"
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 prost-types = "0.13"
+tempfile = "3"
+tokio-stream = "0.1"
+wasmparser = "0.220"
+wat = "1"
