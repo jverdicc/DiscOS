@@ -93,6 +93,10 @@ enum ClaimCommand {
         #[arg(long)]
         manifests: Vec<PathBuf>,
     },
+    Freeze {
+        #[arg(long)]
+        claim_id: String,
+    },
     Seal {
         #[arg(long)]
         claim_id: String,
@@ -266,7 +270,6 @@ async fn main() -> anyhow::Result<()> {
                         alpha_micros,
                         epoch_config_ref: epoch_config_ref.clone(),
                         output_schema_id,
-                        epoch_size,
                     },
                     TopicSignals {
                         semantic_hash: None,
@@ -305,13 +308,13 @@ async fn main() -> anyhow::Result<()> {
                 let resp = client
                     .create_claim_v2(pb::CreateClaimV2Request {
                         claim_name: claim_name.clone(),
-                        metadata: Some(pb::ClaimMetadata {
+                        metadata: Some(pb::ClaimMetadataV2 {
                             lane,
                             alpha_micros,
                             epoch_config_ref,
                             output_schema_id: "cbrn-sc.v1".into(),
                         }),
-                        signals: Some(pb::TopicSignals {
+                        signals: Some(pb::TopicSignalsV2 {
                             semantic_hash: vec![],
                             phys_hir_signature_hash: topic.signals.phys_hir_signature_hash.to_vec(),
                             dependency_merkle_root: vec![],
@@ -324,7 +327,7 @@ async fn main() -> anyhow::Result<()> {
                     .await?;
                 println!(
                     "{}",
-                    serde_json::json!({"claim_id": resp.claim_id, "topic_id": hex_encode(&resp.topic_id), "local_topic_id": topic.topic_id_hex })
+                    serde_json::json!({"claim_id": hex_encode(&resp.claim_id), "topic_id": hex_encode(&resp.topic_id), "local_topic_id": topic.topic_id_hex })
                 );
             }
             ClaimCommand::Commit {
@@ -357,7 +360,7 @@ async fn main() -> anyhow::Result<()> {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
                 let resp = client
                     .commit_artifacts(pb::CommitArtifactsRequest {
-                        claim_id,
+                        claim_id: hex_decode_bytes(&claim_id)?,
                         wasm_hash: wasm_hash_for_bytes(&wasm_bytes).to_vec(),
                         wasm_module: wasm_bytes,
                         manifests: artifact_manifests,
@@ -365,15 +368,30 @@ async fn main() -> anyhow::Result<()> {
                     .await?;
                 println!("{}", serde_json::json!({"accepted": resp.accepted}));
             }
+            ClaimCommand::Freeze { claim_id } => {
+                let mut client = DiscosClient::connect(&args.endpoint).await?;
+                let resp = client
+                    .freeze_gates(pb::FreezeGatesRequest {
+                        claim_id: hex_decode_bytes(&claim_id)?,
+                    })
+                    .await?;
+                println!("{}", serde_json::json!({"frozen": resp.frozen}));
+            }
             ClaimCommand::Seal { claim_id } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
-                let resp = client.seal_claim(pb::SealClaimRequest { claim_id }).await?;
+                let resp = client
+                    .seal_claim(pb::SealClaimRequest {
+                        claim_id: hex_decode_bytes(&claim_id)?,
+                    })
+                    .await?;
                 println!("{}", serde_json::json!({"sealed": resp.sealed}));
             }
             ClaimCommand::Execute { claim_id } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
                 let resp = client
-                    .execute_claim_v2(pb::ExecuteClaimV2Request { claim_id })
+                    .execute_claim_v2(pb::ExecuteClaimV2Request {
+                        claim_id: hex_decode_bytes(&claim_id)?,
+                    })
                     .await?;
                 println!(
                     "{}",
@@ -386,7 +404,9 @@ async fn main() -> anyhow::Result<()> {
             } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
                 let resp = client
-                    .fetch_capsule(pb::FetchCapsuleRequest { claim_id })
+                    .fetch_capsule(pb::FetchCapsuleRequest {
+                        claim_id: hex_decode_bytes(&claim_id)?,
+                    })
                     .await?;
                 if verify_etl {
                     let cache_path = cache_file_path();
@@ -479,7 +499,7 @@ async fn main() -> anyhow::Result<()> {
                 let ev = ev?;
                 println!(
                     "{}",
-                    serde_json::json!({"claim_id": ev.claim_id, "reason_code": ev.reason_code, "logical_epoch": ev.logical_epoch})
+                    serde_json::json!({"claim_id": hex_encode(&ev.claim_id), "reason_code": ev.reason_code, "logical_epoch": ev.logical_epoch})
                 );
             }
         }

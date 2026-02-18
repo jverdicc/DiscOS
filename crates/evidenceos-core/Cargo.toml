@@ -7,3 +7,4 @@ license.workspace = true
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
+hex = "0.4"

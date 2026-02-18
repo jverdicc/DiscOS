@@ -49,9 +49,9 @@ pub fn build_restricted_wasm() -> WasmBuildOutput {
     module.section(&types);
 
     let mut imports = ImportSection::new();
-    imports.import("kernel", "oracle_query", oracle_sig);
-    imports.import("kernel", "emit_structured_claim", emit_sig);
-    imports.import("kernel", "get_logical_epoch", epoch_sig);
+    imports.import("env", "oracle_query", oracle_sig);
+    imports.import("env", "emit_structured_claim", emit_sig);
+    imports.import("env", "get_logical_epoch", epoch_sig);
     module.section(&imports);
 
     let mut funcs = FunctionSection::new();
@@ -208,23 +208,23 @@ mod tests {
             .any(|(n, k)| n == "memory" && *k == ExternalKind::Memory));
 
         assert!(imports.iter().any(|(m, n, sig)| {
-            m == "kernel"
+            m == "env"
                 && n == "oracle_query"
                 && sig.as_ref() == Some(&(vec![WValType::I32, WValType::I32], vec![WValType::I32]))
         }));
         assert!(imports.iter().any(|(m, n, sig)| {
-            m == "kernel"
+            m == "env"
                 && n == "emit_structured_claim"
                 && sig.as_ref() == Some(&(vec![WValType::I32, WValType::I32], vec![]))
         }));
         assert!(imports.iter().any(|(m, n, sig)| {
-            m == "kernel"
+            m == "env"
                 && n == "get_logical_epoch"
                 && sig.as_ref() == Some(&(vec![], vec![WValType::I64]))
         }));
 
         for (module, name, _) in imports {
-            assert_eq!(module, "kernel");
+            assert_eq!(module, "env");
             assert!(
                 ["oracle_query", "emit_structured_claim", "get_logical_epoch"]
                     .contains(&name.as_str())

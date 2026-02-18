@@ -110,7 +110,6 @@ mod tests {
                 alpha_micros: 50_000,
                 epoch_config_ref: "epoch/v1".into(),
                 output_schema_id: "cbrn-sc.v1".into(),
-                epoch_size: 10_000,
             },
             TopicSignals {
                 semantic_hash: None,
