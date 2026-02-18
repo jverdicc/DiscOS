@@ -23,3 +23,26 @@ jobs:
 
       - name: Tests
         run: cargo test --workspace --all-targets
+
+
+  system:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Checkout EvidenceOS (configurable placeholder)
+        run: |
+          EVIDENCEOS_REPO="${EVIDENCEOS_REPO:-https://github.com/example/EvidenceOS.git}"
+          EVIDENCEOS_REF="${EVIDENCEOS_REF:-main}"
+          git clone --depth 1 --branch "$EVIDENCEOS_REF" "$EVIDENCEOS_REPO" ../EvidenceOS
+
+      - name: Build daemon
+        run: cargo build --manifest-path ../EvidenceOS/Cargo.toml --bin evidenceos-daemon
+
+      - name: Run DiscOS system tests
+        env:
+          EVIDENCEOS_DAEMON_ADDR: http://127.0.0.1:50051
+        run: cargo test -p discos-client --test e2e_against_daemon_v2 -- --ignored
