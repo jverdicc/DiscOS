@@ -75,7 +75,12 @@ async fn claim_lifecycle_v2_against_daemon() {
         Err(_) => return,
     };
 
-    let _ = canonical_output_matches_capsule(&exec.canonical_output, &capsule.capsule);
+    let _ = canonical_output_matches_capsule(
+        &exec.canonical_output,
+        &capsule.capsule,
+        create.claim_id.as_bytes(),
+        &create.topic_id,
+    );
 
     if let Some(inclusion) = capsule.inclusion {
         if let Ok(leaf_hash) = inclusion.leaf_hash.clone().try_into() {
