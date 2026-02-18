@@ -4,9 +4,12 @@
 )]
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use evidenceos_protocol::domains;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
+
+const MAX_MERKLE_PATH_LEN: usize = 64;
 
 pub use evidenceos_protocol::pb;
 
@@ -204,6 +207,21 @@ impl DiscosClient {
             .map(|r| r.into_inner())
             .map_err(|e| ClientError::Kernel(e.to_string()))
     }
+
+    pub async fn get_public_key(&mut self) -> Result<Vec<u8>, ClientError> {
+        self.get_signed_tree_head(pb::GetSignedTreeHeadRequest::default())
+            .await
+            .map(|_| Vec::new())
+            .and_then(|v| {
+                if v.is_empty() {
+                    Err(ClientError::Kernel(
+                        "server public key endpoint unavailable in current protocol".to_string(),
+                    ))
+                } else {
+                    Ok(v)
+                }
+            })
+    }
 }
 
 pub fn validate_claim_and_topic_ids(claim_id: &[u8], topic_id: &[u8]) -> Result<(), ClientError> {
@@ -220,17 +238,57 @@ pub fn validate_claim_and_topic_ids(claim_id: &[u8], topic_id: &[u8]) -> Result<
     Ok(())
 }
 
+#[derive(Debug, Deserialize)]
+struct CapsuleView {
+    structured_output_hash_hex: String,
+    claim_id_hex: String,
+    topic_id_hex: String,
+}
+
 pub fn canonical_output_matches_capsule(
-    canonical_output: &[u8],
-    capsule: &[u8],
+    structured_output: &[u8],
+    capsule_bytes: &[u8],
+    expected_claim_id: &[u8],
+    expected_topic_id: &[u8],
 ) -> Result<(), ClientError> {
-    if canonical_output == capsule {
-        Ok(())
-    } else {
-        Err(ClientError::VerificationFailed(
-            "canonical_output does not match capsule contents".to_string(),
-        ))
+    let view: CapsuleView = serde_json::from_slice(capsule_bytes).map_err(|e| {
+        ClientError::VerificationFailed(format!("capsule_bytes is not valid capsule JSON: {e}"))
+    })?;
+
+    let output_hash = hex::decode(&view.structured_output_hash_hex).map_err(|e| {
+        ClientError::VerificationFailed(format!("invalid structured_output_hash_hex: {e}"))
+    })?;
+    if output_hash.len() != 32 {
+        return Err(ClientError::VerificationFailed(
+            "structured_output_hash_hex must decode to 32 bytes".to_string(),
+        ));
     }
+
+    let claim_id = hex::decode(&view.claim_id_hex)
+        .map_err(|e| ClientError::VerificationFailed(format!("invalid claim_id_hex: {e}")))?;
+    let topic_id = hex::decode(&view.topic_id_hex)
+        .map_err(|e| ClientError::VerificationFailed(format!("invalid topic_id_hex: {e}")))?;
+
+    let structured_output_hash = sha256(structured_output);
+    if output_hash.as_slice() != structured_output_hash {
+        return Err(ClientError::VerificationFailed(
+            "structured_output hash does not match capsule structured_output_hash_hex".to_string(),
+        ));
+    }
+
+    if claim_id.as_slice() != expected_claim_id {
+        return Err(ClientError::VerificationFailed(
+            "capsule claim_id_hex does not match expected claim id".to_string(),
+        ));
+    }
+
+    if topic_id.as_slice() != expected_topic_id {
+        return Err(ClientError::VerificationFailed(
+            "capsule topic_id_hex does not match expected topic id".to_string(),
+        ));
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -257,7 +315,7 @@ pub struct ConsistencyProof {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedRevocation {
-    pub claim_id: String,
+    pub claim_id: Vec<u8>,
     pub reason_code: String,
     pub logical_epoch: u64,
     pub signature: [u8; 64],
@@ -267,6 +325,14 @@ pub fn sha256(input: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(input);
     hasher.finalize().into()
+}
+
+pub fn sha256_domain(domain: &[u8], payload: &[u8]) -> [u8; 32] {
+    let mut material = Vec::with_capacity(domain.len() + 1 + payload.len());
+    material.extend_from_slice(domain);
+    material.push(0);
+    material.extend_from_slice(payload);
+    sha256(&material)
 }
 
 pub fn merkle_leaf_hash(payload: &[u8]) -> [u8; 32] {
@@ -286,6 +352,9 @@ fn merkle_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
 
 pub fn verify_inclusion_proof(root: [u8; 32], proof: &InclusionProof) -> bool {
     if proof.tree_size == 0 || proof.leaf_index >= proof.tree_size {
+        return false;
+    }
+    if proof.audit_path.len() > MAX_MERKLE_PATH_LEN {
         return false;
     }
 
@@ -329,7 +398,7 @@ pub fn verify_consistency_proof(
     if proof.old_tree_size == proof.new_tree_size {
         return proof.path.is_empty() && old_root == new_root;
     }
-    if proof.path.is_empty() {
+    if proof.path.is_empty() || proof.path.len() > MAX_MERKLE_PATH_LEN {
         return false;
     }
 
@@ -367,6 +436,96 @@ pub fn verify_consistency_proof(
     fr == old_root && sr == new_root
 }
 
+pub fn verify_capsule_response(
+    response: &pb::FetchCapsuleResponse,
+    structured_output: &[u8],
+    expected_claim_id: &[u8],
+    expected_topic_id: &[u8],
+    server_pubkey: &[u8],
+    previous_sth: Option<&SignedTreeHead>,
+) -> Result<(), ClientError> {
+    canonical_output_matches_capsule(
+        structured_output,
+        &response.capsule,
+        expected_claim_id,
+        expected_topic_id,
+    )?;
+
+    let capsule_hash = sha256_domain(domains::CAPSULE_HASH_V1, &response.capsule);
+
+    let inclusion = response
+        .inclusion
+        .as_ref()
+        .ok_or_else(|| ClientError::VerificationFailed("missing inclusion proof".to_string()))?;
+    let leaf_hash: [u8; 32] = inclusion.leaf_hash.as_slice().try_into().map_err(|_| {
+        ClientError::VerificationFailed("inclusion leaf_hash must be 32 bytes".to_string())
+    })?;
+    if leaf_hash != capsule_hash {
+        return Err(ClientError::VerificationFailed(
+            "inclusion leaf_hash does not match capsule_hash".to_string(),
+        ));
+    }
+
+    let root_hash: [u8; 32] = response.etl_root_hash.as_slice().try_into().map_err(|_| {
+        ClientError::VerificationFailed("etl_root_hash must be 32 bytes".to_string())
+    })?;
+    let proof = InclusionProof {
+        leaf_hash,
+        leaf_index: inclusion.leaf_index,
+        tree_size: inclusion.tree_size,
+        audit_path: inclusion
+            .audit_path
+            .iter()
+            .map(|n| {
+                n.as_slice().try_into().map_err(|_| {
+                    ClientError::VerificationFailed(
+                        "inclusion audit path node must be 32 bytes".to_string(),
+                    )
+                })
+            })
+            .collect::<Result<Vec<[u8; 32]>, ClientError>>()?,
+    };
+    if !verify_inclusion_proof(root_hash, &proof) {
+        return Err(ClientError::VerificationFailed(
+            "inclusion proof verification failed".to_string(),
+        ));
+    }
+
+    let sth = SignedTreeHead {
+        tree_size: response.etl_tree_size,
+        root_hash,
+        signature: response.sth_signature.as_slice().try_into().map_err(|_| {
+            ClientError::VerificationFailed("sth_signature must be 64 bytes".to_string())
+        })?,
+    };
+    verify_sth_signature(&sth, server_pubkey)?;
+
+    if let (Some(prev), Some(consistency)) = (previous_sth, response.consistency.as_ref()) {
+        let consistency_proof = ConsistencyProof {
+            old_tree_size: consistency.old_tree_size,
+            new_tree_size: consistency.new_tree_size,
+            path: consistency
+                .path
+                .iter()
+                .map(|n| {
+                    n.as_slice().try_into().map_err(|_| {
+                        ClientError::VerificationFailed(
+                            "consistency path node must be 32 bytes".to_string(),
+                        )
+                    })
+                })
+                .collect::<Result<Vec<[u8; 32]>, ClientError>>()?,
+        };
+        if !verify_consistency_proof(prev.root_hash, sth.root_hash, &consistency_proof) {
+            return Err(ClientError::VerificationFailed(
+                "consistency proof verification failed".to_string(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 pub fn verify_inclusion(root: [u8; 32], proof: &InclusionProof) -> bool {
     verify_inclusion_proof(root, proof)
 }
@@ -395,9 +554,10 @@ pub fn verify_sth_signature(sth: &SignedTreeHead, kernel_pubkey: &[u8]) -> Resul
 
     let signature = Signature::from_bytes(&sth.signature);
 
-    let mut sign_bytes = Vec::with_capacity(40);
-    sign_bytes.extend_from_slice(&sth.tree_size.to_be_bytes());
-    sign_bytes.extend_from_slice(&sth.root_hash);
+    let mut sign_payload = Vec::with_capacity(40);
+    sign_payload.extend_from_slice(&sth.tree_size.to_be_bytes());
+    sign_payload.extend_from_slice(&sth.root_hash);
+    let sign_bytes = sha256_domain(domains::STH_SIGNATURE_V1, &sign_payload);
 
     pubkey
         .verify(&sign_bytes, &signature)
@@ -423,12 +583,13 @@ pub fn verify_revocation_signature(
 
     let signature = Signature::from_bytes(&revocation.signature);
 
-    let mut sign_bytes = Vec::new();
-    sign_bytes.extend_from_slice(&(revocation.claim_id.len() as u32).to_be_bytes());
-    sign_bytes.extend_from_slice(revocation.claim_id.as_bytes());
-    sign_bytes.extend_from_slice(&(revocation.reason_code.len() as u32).to_be_bytes());
-    sign_bytes.extend_from_slice(revocation.reason_code.as_bytes());
-    sign_bytes.extend_from_slice(&revocation.logical_epoch.to_be_bytes());
+    let mut sign_payload = Vec::new();
+    sign_payload.extend_from_slice(&(revocation.claim_id.len() as u32).to_be_bytes());
+    sign_payload.extend_from_slice(&revocation.claim_id);
+    sign_payload.extend_from_slice(&(revocation.reason_code.len() as u32).to_be_bytes());
+    sign_payload.extend_from_slice(revocation.reason_code.as_bytes());
+    sign_payload.extend_from_slice(&revocation.logical_epoch.to_be_bytes());
+    let sign_bytes = sha256_domain(domains::REVOCATION_FEED_V1, &sign_payload);
 
     pubkey
         .verify(&sign_bytes, &signature)
@@ -554,9 +715,10 @@ mod tests {
     #[test]
     fn sth_signature_roundtrip_and_bit_flips() {
         let sk = SigningKey::from_bytes(&[7u8; 32]);
-        let mut signed_bytes = Vec::new();
-        signed_bytes.extend_from_slice(&7u64.to_be_bytes());
-        signed_bytes.extend_from_slice(&[4u8; 32]);
+        let mut signed_payload = Vec::new();
+        signed_payload.extend_from_slice(&7u64.to_be_bytes());
+        signed_payload.extend_from_slice(&[4u8; 32]);
+        let signed_bytes = sha256_domain(domains::STH_SIGNATURE_V1, &signed_payload);
         let sig = sk.sign(&signed_bytes);
 
         let sth = SignedTreeHead {
@@ -676,16 +838,17 @@ mod tests {
     #[test]
     fn revocation_signature_roundtrip_and_tamper() {
         let sk = SigningKey::from_bytes(&[9u8; 32]);
-        let mut sign_bytes = Vec::new();
-        sign_bytes.extend_from_slice(&5u32.to_be_bytes());
-        sign_bytes.extend_from_slice(b"claim");
-        sign_bytes.extend_from_slice(&7u32.to_be_bytes());
-        sign_bytes.extend_from_slice(b"expired");
-        sign_bytes.extend_from_slice(&11u64.to_be_bytes());
+        let mut sign_payload = Vec::new();
+        sign_payload.extend_from_slice(&5u32.to_be_bytes());
+        sign_payload.extend_from_slice(b"claim");
+        sign_payload.extend_from_slice(&7u32.to_be_bytes());
+        sign_payload.extend_from_slice(b"expired");
+        sign_payload.extend_from_slice(&11u64.to_be_bytes());
+        let sign_bytes = sha256_domain(domains::REVOCATION_FEED_V1, &sign_payload);
         let sig = sk.sign(&sign_bytes);
 
         let rev = SignedRevocation {
-            claim_id: "claim".to_string(),
+            claim_id: b"claim".to_vec(),
             reason_code: "expired".to_string(),
             logical_epoch: 11,
             signature: sig.to_bytes(),

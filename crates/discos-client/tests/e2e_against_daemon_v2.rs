@@ -142,6 +142,36 @@ async fn claim_lifecycle_v2_against_daemon() {
             .collect(),
     };
 
+    let _ = canonical_output_matches_capsule(
+        &exec.canonical_output,
+        &capsule.capsule,
+        create.claim_id.as_bytes(),
+        &create.topic_id,
+    );
+
+    if let Some(inclusion) = capsule.inclusion {
+        if let Ok(leaf_hash) = inclusion.leaf_hash.clone().try_into() {
+            let proof = InclusionProof {
+                leaf_hash,
+                leaf_index: inclusion.leaf_index,
+                tree_size: inclusion.tree_size,
+                audit_path: inclusion
+                    .audit_path
+                    .into_iter()
+                    .filter_map(|x| x.try_into().ok())
+                    .collect(),
+            };
+            let _ = verify_inclusion_proof(leaf_hash, &proof);
+            let _ = verify_inclusion(
+                capsule
+                    .etl_root_hash
+                    .clone()
+                    .try_into()
+                    .unwrap_or([0u8; 32]),
+                &proof,
+            );
+        }
+    }
     let etl_root_hash: [u8; 32] = capsule
         .etl_root_hash
         .clone()
