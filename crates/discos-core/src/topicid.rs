@@ -237,6 +237,16 @@ mod tests {
     }
 
     #[test]
+    fn sha256_nist_vector_448bits() {
+        assert_eq!(
+            hex_encode_32(&sha256(
+                b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
+            )),
+            "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+        );
+    }
+
+    #[test]
     fn sha256_nist_vector_empty() {
         assert_eq!(
             hex_encode_32(&sha256(b"")),
@@ -257,6 +267,35 @@ mod tests {
         s.phys_hir_signature_hash[0] ^= 0x01;
         let changed = compute_topic_id(&m, s);
         assert_ne!(base.topic_id, changed.topic_id);
+    }
+
+    #[test]
+    fn topic_id_lane_alpha_and_epoch_change_alter_id() {
+        let (mut m, s) = sample();
+        let base = compute_topic_id(&m, s.clone());
+
+        m.lane = "bio".into();
+        let lane = compute_topic_id(&m, s.clone());
+        assert_ne!(base.topic_id, lane.topic_id);
+
+        m.lane = "cbrn".into();
+        m.alpha_micros = 10_000;
+        let alpha = compute_topic_id(&m, s.clone());
+        assert_ne!(base.topic_id, alpha.topic_id);
+
+        m.alpha_micros = 50_000;
+        m.epoch_config_ref = "epoch/v2".into();
+        let epoch = compute_topic_id(&m, s);
+        assert_ne!(base.topic_id, epoch.topic_id);
+    }
+
+    #[test]
+    fn topic_id_all_none_signals_is_deterministic() {
+        let (m, s) = sample();
+        let a = compute_topic_id(&m, s.clone());
+        let b = compute_topic_id(&m, s);
+        assert_eq!(a.topic_id, b.topic_id);
+        assert!(!a.escalate_to_heavy);
     }
 
     #[test]
