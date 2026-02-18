@@ -240,17 +240,30 @@ pub fn verify_inclusion_proof(root: [u8; 32], proof: &InclusionProof) -> bool {
         return false;
     }
 
-    let mut idx = proof.leaf_index;
+    let mut fn_idx = proof.leaf_index;
+    let mut sn_idx = proof.tree_size - 1;
     let mut hash = proof.leaf_hash;
+
     for sibling in &proof.audit_path {
-        hash = if idx & 1 == 0 {
-            merkle_node_hash(hash, *sibling)
+        if sn_idx == 0 {
+            return false;
+        }
+
+        if (fn_idx & 1) == 1 || fn_idx == sn_idx {
+            hash = merkle_node_hash(*sibling, hash);
+            while fn_idx != 0 && (fn_idx & 1) == 0 {
+                fn_idx >>= 1;
+                sn_idx >>= 1;
+            }
         } else {
-            merkle_node_hash(*sibling, hash)
-        };
-        idx >>= 1;
+            hash = merkle_node_hash(hash, *sibling);
+        }
+
+        fn_idx >>= 1;
+        sn_idx >>= 1;
     }
-    hash == root
+
+    sn_idx == 0 && hash == root
 }
 
 pub fn verify_consistency_proof(
@@ -416,6 +429,44 @@ mod tests {
         assert!(verify_inclusion_proof(root, &proof));
     }
 
+    fn largest_power_of_two_less_than(n: usize) -> usize {
+        1usize << ((usize::BITS - (n - 1).leading_zeros() - 1) as usize)
+    }
+
+    fn reference_mth(leaves: &[[u8; 32]]) -> [u8; 32] {
+        match leaves.len() {
+            0 => sha256(&[]),
+            1 => leaves[0],
+            n => {
+                let split = largest_power_of_two_less_than(n);
+                let left = reference_mth(&leaves[..split]);
+                let right = reference_mth(&leaves[split..]);
+                merkle_node_hash(left, right)
+            }
+        }
+    }
+
+    fn reference_inclusion_proof(index: usize, leaves: &[[u8; 32]]) -> Vec<[u8; 32]> {
+        fn build(index: usize, leaves: &[[u8; 32]], out: &mut Vec<[u8; 32]>) {
+            if leaves.len() <= 1 {
+                return;
+            }
+
+            let split = largest_power_of_two_less_than(leaves.len());
+            if index < split {
+                build(index, &leaves[..split], out);
+                out.push(reference_mth(&leaves[split..]));
+            } else {
+                build(index - split, &leaves[split..], out);
+                out.push(reference_mth(&leaves[..split]));
+            }
+        }
+
+        let mut out = Vec::new();
+        build(index, leaves, &mut out);
+        out
+    }
+
     #[test]
     fn consistency_proof_verifies_prefix_tree() {
         let l0 = merkle_leaf_hash(b"a");
@@ -507,6 +558,70 @@ mod tests {
             audit_path: vec![leaves4[2], left],
         };
         assert!(verify_inclusion_proof(root4, &proof4));
+    }
+
+    #[test]
+    fn inclusion_proof_exhaustive_up_to_64_leaves() {
+        for n in 1usize..=64 {
+            let leaves = (0..n)
+                .map(|i| merkle_leaf_hash(&i.to_be_bytes()))
+                .collect::<Vec<_>>();
+            let root = reference_mth(&leaves);
+
+            for i in 0usize..n {
+                let proof = InclusionProof {
+                    leaf_hash: leaves[i],
+                    leaf_index: i as u64,
+                    tree_size: n as u64,
+                    audit_path: reference_inclusion_proof(i, &leaves),
+                };
+                assert!(
+                    verify_inclusion(root, &proof),
+                    "proof should verify for n={n}, i={i}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn inclusion_proof_rejects_tampering_and_invalid_inputs() {
+        let leaves = (0u8..8).map(|i| merkle_leaf_hash(&[i])).collect::<Vec<_>>();
+        let root = reference_mth(&leaves);
+        let valid = InclusionProof {
+            leaf_hash: leaves[7],
+            leaf_index: 7,
+            tree_size: leaves.len() as u64,
+            audit_path: reference_inclusion_proof(7, &leaves),
+        };
+        assert!(verify_inclusion(root, &valid));
+
+        let mut bad_leaf = valid.clone();
+        bad_leaf.leaf_hash[0] ^= 0x01;
+        assert!(!verify_inclusion(root, &bad_leaf));
+
+        let mut bad_audit = valid.clone();
+        bad_audit.audit_path[0][0] ^= 0x01;
+        assert!(!verify_inclusion(root, &bad_audit));
+
+        let mut bad_index = valid.clone();
+        bad_index.leaf_index = 0;
+        assert!(!verify_inclusion(root, &bad_index));
+
+        let mut bad_size = valid.clone();
+        bad_size.tree_size = 0;
+        assert!(!verify_inclusion(root, &bad_size));
+
+        let mut bad_size_lt_index = valid.clone();
+        bad_size_lt_index.tree_size = 7;
+        assert!(!verify_inclusion(root, &bad_size_lt_index));
+
+        let mut short_path = valid.clone();
+        let _ = short_path.audit_path.pop();
+        assert!(!verify_inclusion(root, &short_path));
+
+        let mut long_path = valid;
+        long_path.audit_path.push([0u8; 32]);
+        assert!(!verify_inclusion(root, &long_path));
     }
 
     #[test]
