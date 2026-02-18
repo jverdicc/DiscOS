@@ -20,7 +20,13 @@ proptest! {
         phys in any::<[u8;32]>(),
         dep in any::<Option<[u8;32]>>()
     ) {
-        let m = ClaimMetadata { lane, alpha_micros: alpha, epoch_config_ref: epoch, output_schema_id: schema };
+        let m = ClaimMetadata {
+            lane,
+            alpha_micros: alpha,
+            epoch_config_ref: epoch,
+            output_schema_id: schema,
+            epoch_size: 0,
+        };
         let s = TopicSignals { semantic_hash: semantic, phys_hir_signature_hash: phys, dependency_merkle_root: dep };
         let a = compute_topic_id(&m, s.clone());
         let b = compute_topic_id(&m, s);
