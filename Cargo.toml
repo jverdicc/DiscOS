@@ -6,6 +6,8 @@ resolver = "2"
 members = [
   "crates/discos-core",
   "crates/discos-cli",
+  "crates/discos-client",
+  "crates/discos-builder",
 ]
 
 [workspace.package]
