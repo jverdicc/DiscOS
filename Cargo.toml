@@ -8,6 +8,7 @@ members = [
   "crates/discos-cli",
   "crates/discos-client",
   "crates/discos-builder",
+  "crates/evidenceos-core",
   "crates/evidenceos-protocol",
 ]
 
