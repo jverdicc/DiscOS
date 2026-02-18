@@ -73,6 +73,17 @@ impl DiscosClient {
             .map_err(|e| ClientError::Kernel(e.to_string()))
     }
 
+    pub async fn create_claim_v2(
+        &mut self,
+        req: pb::CreateClaimV2Request,
+    ) -> Result<pb::CreateClaimV2Response, ClientError> {
+        self.inner
+            .create_claim_v2(req)
+            .await
+            .map(|r| r.into_inner())
+            .map_err(|e| ClientError::Kernel(e.to_string()))
+    }
+
     pub async fn commit_artifacts(
         &mut self,
         req: pb::CommitArtifactsRequest,
@@ -112,6 +123,17 @@ impl DiscosClient {
     ) -> Result<pb::ExecuteClaimResponse, ClientError> {
         self.inner
             .execute_claim(req)
+            .await
+            .map(|r| r.into_inner())
+            .map_err(|e| ClientError::Kernel(e.to_string()))
+    }
+
+    pub async fn execute_claim_v2(
+        &mut self,
+        req: pb::ExecuteClaimV2Request,
+    ) -> Result<pb::ExecuteClaimV2Response, ClientError> {
+        self.inner
+            .execute_claim_v2(req)
             .await
             .map(|r| r.into_inner())
             .map_err(|e| ClientError::Kernel(e.to_string()))
@@ -181,6 +203,33 @@ impl DiscosClient {
             .await
             .map(|r| r.into_inner())
             .map_err(|e| ClientError::Kernel(e.to_string()))
+    }
+}
+
+pub fn validate_claim_and_topic_ids(claim_id: &[u8], topic_id: &[u8]) -> Result<(), ClientError> {
+    if claim_id.len() != 32 {
+        return Err(ClientError::InvalidInput(
+            "claim_id must be 32 bytes".to_string(),
+        ));
+    }
+    if topic_id.len() != 32 {
+        return Err(ClientError::InvalidInput(
+            "topic_id must be 32 bytes".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+pub fn canonical_output_matches_capsule(
+    canonical_output: &[u8],
+    capsule: &[u8],
+) -> Result<(), ClientError> {
+    if canonical_output == capsule {
+        Ok(())
+    } else {
+        Err(ClientError::VerificationFailed(
+            "canonical_output does not match capsule contents".to_string(),
+        ))
     }
 }
 

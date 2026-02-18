@@ -66,7 +66,7 @@ enum Command {
 enum ClaimCommand {
     Create {
         #[arg(long)]
-        claim_id: String,
+        claim_name: String,
         #[arg(long)]
         alpha_micros: u32,
         #[arg(long)]
@@ -75,6 +75,14 @@ enum ClaimCommand {
         epoch_config_ref: String,
         #[arg(long, default_value = "cbrn-sc.v1")]
         output_schema_id: String,
+        #[arg(long)]
+        holdout_ref: String,
+        #[arg(long)]
+        epoch_size: u32,
+        #[arg(long)]
+        oracle_num_symbols: u32,
+        #[arg(long)]
+        access_credit: u64,
     },
     Commit {
         #[arg(long)]
@@ -210,19 +218,23 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Claim { cmd } => match cmd {
             ClaimCommand::Create {
-                claim_id,
+                claim_name,
                 alpha_micros,
                 lane,
                 epoch_config_ref,
                 output_schema_id,
+                holdout_ref,
+                epoch_size,
+                oracle_num_symbols,
+                access_credit,
             } => {
-                let dir = claim_dir(&claim_id);
+                let dir = claim_dir(&claim_name);
                 fs::create_dir_all(&dir)?;
 
                 let wasm = build_restricted_wasm();
                 fs::write(dir.join("wasm.bin"), &wasm.wasm_bytes)?;
                 let alpha = AlphaHIRManifest {
-                    plan_id: claim_id.clone(),
+                    plan_id: claim_name.clone(),
                     code_hash_hex: hex_encode(&wasm.code_hash),
                     oracle_kinds: vec!["oracle_query".into()],
                     output_schema_id: output_schema_id.clone(),
@@ -281,8 +293,8 @@ async fn main() -> anyhow::Result<()> {
 
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
                 let resp = client
-                    .create_claim(pb::CreateClaimRequest {
-                        claim_id: claim_id.clone(),
+                    .create_claim_v2(pb::CreateClaimV2Request {
+                        claim_name: claim_name.clone(),
                         metadata: Some(pb::ClaimMetadata {
                             lane,
                             alpha_micros,
@@ -294,6 +306,10 @@ async fn main() -> anyhow::Result<()> {
                             phys_hir_signature_hash: topic.signals.phys_hir_signature_hash.to_vec(),
                             dependency_merkle_root: vec![],
                         }),
+                        holdout_ref,
+                        epoch_size,
+                        oracle_num_symbols,
+                        access_credit,
                     })
                     .await?;
                 println!(
@@ -347,11 +363,11 @@ async fn main() -> anyhow::Result<()> {
             ClaimCommand::Execute { claim_id } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
                 let resp = client
-                    .execute_claim(pb::ExecuteClaimRequest { claim_id })
+                    .execute_claim_v2(pb::ExecuteClaimV2Request { claim_id })
                     .await?;
                 println!(
                     "{}",
-                    serde_json::json!({"executed": resp.executed, "execution_id": resp.execution_id})
+                    serde_json::json!({"certified": resp.certified, "e_value": resp.e_value, "canonical_output_len": resp.canonical_output.len()})
                 );
             }
             ClaimCommand::FetchCapsule {
