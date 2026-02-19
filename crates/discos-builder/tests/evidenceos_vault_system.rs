@@ -57,6 +57,7 @@ async fn builder_generated_wasm_commits_executes_and_fetches_capsule() -> anyhow
             epoch_size: 1,
             oracle_num_symbols: 4,
             access_credit: 1,
+            oracle_id: "default".into(),
         })
         .await?;
 

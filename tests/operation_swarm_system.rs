@@ -371,6 +371,7 @@ async fn operation_swarm_system_topic_budget_shared_and_stops() {
                 epoch_size: 16,
                 oracle_num_symbols: 8,
                 access_credit: 1,
+                oracle_id: "default".into(),
             });
             let md = tonic::metadata::MetadataValue::try_from(identity.as_str())
                 .expect("identity metadata should be valid");
