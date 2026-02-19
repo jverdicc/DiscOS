@@ -424,6 +424,8 @@ pub fn kout_budget_charge(claim: &CbrnStructuredClaim) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+    use std::collections::HashSet;
 
     fn sample() -> CbrnStructuredClaim {
         CbrnStructuredClaim {
@@ -445,6 +447,30 @@ mod tests {
             envelope_manifest_version: 1,
             decision: Decision::Pass,
             reason_codes: vec![ReasonCode::SensorAgreement],
+        }
+    }
+
+    fn with_all_fields_populated() -> CbrnStructuredClaim {
+        CbrnStructuredClaim {
+            quantities: vec![
+                QuantizedValue {
+                    quantity_kind: QuantityKind::Concentration,
+                    value_q: 1200,
+                    scale: Scale::Micro,
+                    unit: SiUnit::MolPerM3,
+                },
+                QuantizedValue {
+                    quantity_kind: QuantityKind::DoseRate,
+                    value_q: 42,
+                    scale: Scale::Milli,
+                    unit: SiUnit::GrayPerSec,
+                },
+            ],
+            references: vec![[2u8; 32], [7u8; 32]],
+            reason_codes: vec![ReasonCode::SensorAgreement, ReasonCode::AboveThreshold],
+            decision: Decision::Heavy,
+            envelope_manifest_version: 9,
+            ..sample()
         }
     }
 
@@ -501,10 +527,500 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_empty_quantities() {
+        let mut c = sample();
+        c.quantities.clear();
+        assert!(validate_cbrn_claim(&c).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_too_many_quantities() {
+        let mut c = sample();
+        c.quantities = (0..(MAX_QUANTITIES + 1))
+            .map(|_| QuantizedValue {
+                quantity_kind: QuantityKind::Concentration,
+                value_q: 1,
+                scale: Scale::Unit,
+                unit: SiUnit::MolPerM3,
+            })
+            .collect();
+        assert!(validate_cbrn_claim(&c).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_negative_value_q() {
+        let mut c = sample();
+        c.quantities[0].value_q = -1;
+        assert!(validate_cbrn_claim(&c).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_too_many_references() {
+        let mut c = sample();
+        c.references = vec![[9u8; 32]; MAX_REFERENCES + 1];
+        assert!(validate_cbrn_claim(&c).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_empty_reason_codes() {
+        let mut c = sample();
+        c.reason_codes.clear();
+        assert!(validate_cbrn_claim(&c).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_too_many_reason_codes() {
+        let mut c = sample();
+        c.reason_codes = vec![ReasonCode::SensorAgreement; MAX_REASON_CODES + 1];
+        assert!(validate_cbrn_claim(&c).is_err());
+    }
+
+    #[test]
+    fn validate_heavy_requires_specific_reason_code() {
+        let mut c = sample();
+        c.decision = Decision::Heavy;
+        c.reason_codes = vec![ReasonCode::SensorAgreement];
+        assert!(validate_cbrn_claim(&c).is_err());
+    }
+
+    #[test]
+    fn rejects_missing_required_fields() {
+        let missing = json!({
+            "schema_version":"v1_0_0",
+            "profile":"cbrn_sc"
+        });
+        let bytes = serde_json::to_vec(&missing).expect("json serialization succeeds");
+        assert!(parse_cbrn_claim_json(&bytes).is_err());
+    }
+
+    fn canonical_bytes_for(mutator: impl FnOnce(&mut CbrnStructuredClaim)) -> Vec<u8> {
+        let mut c = with_all_fields_populated();
+        mutator(&mut c);
+        canonicalize_cbrn_claim(&c).expect("canonicalization succeeds")
+    }
+
+    #[test]
+    fn profile_variants_encoded_distinctly() {
+        assert_eq!(Profile::variant_count(), 1);
+        assert_eq!(Profile::CbrnSc.discriminant(), 0);
+    }
+
+    #[test]
+    fn domain_variants_encoded_distinctly() {
+        assert_eq!(Domain::variant_count(), 1);
+        assert_eq!(Domain::Cbrn.discriminant(), 0);
+    }
+
+    #[test]
+    fn claim_kind_variants_encoded_distinctly() {
+        assert_eq!(ClaimKind::variant_count(), 1);
+        assert_eq!(ClaimKind::Assessment.discriminant(), 0);
+    }
+
+    #[test]
+    fn quantity_kind_variants_encoded_distinctly() {
+        let unique: HashSet<_> = [
+            QuantityKind::Concentration,
+            QuantityKind::DoseRate,
+            QuantityKind::Activity,
+        ]
+        .iter()
+        .map(QuantityKind::discriminant)
+        .collect();
+        assert_eq!(unique.len(), QuantityKind::variant_count());
+    }
+
+    #[test]
+    fn scale_variants_encoded_distinctly() {
+        let unique: HashSet<_> = [
+            Scale::Unit,
+            Scale::Milli,
+            Scale::Micro,
+            Scale::Nano,
+            Scale::Pico,
+            Scale::Femto,
+        ]
+        .iter()
+        .map(Scale::discriminant)
+        .collect();
+        assert_eq!(unique.len(), Scale::variant_count());
+    }
+
+    #[test]
+    fn unit_variants_encoded_distinctly() {
+        let unique: HashSet<_> = [
+            SiUnit::MolPerM3,
+            SiUnit::KgPerM3,
+            SiUnit::BqPerM3,
+            SiUnit::JPerKg,
+            SiUnit::GrayPerSec,
+            SiUnit::WattPerM2,
+            SiUnit::KgPerKgBody,
+        ]
+        .iter()
+        .map(SiUnit::discriminant)
+        .collect();
+        assert_eq!(unique.len(), SiUnit::variant_count());
+    }
+
+    #[test]
+    fn envelope_check_variants_encoded_distinctly() {
+        let unique: HashSet<_> = [
+            EnvelopeCheck::Match,
+            EnvelopeCheck::Missing,
+            EnvelopeCheck::Mismatch,
+        ]
+        .iter()
+        .map(EnvelopeCheck::discriminant)
+        .collect();
+        assert_eq!(unique.len(), EnvelopeCheck::variant_count());
+    }
+
+    #[test]
+    fn decision_variants_encoded_distinctly() {
+        let unique: HashSet<_> = [
+            Decision::Pass,
+            Decision::Heavy,
+            Decision::Reject,
+            Decision::Escalate,
+        ]
+        .iter()
+        .map(Decision::discriminant)
+        .collect();
+        assert_eq!(unique.len(), Decision::variant_count());
+    }
+
+    #[test]
+    fn canonical_bytes_change_on_each_field_mutation() {
+        let baseline = canonicalize_cbrn_claim(&with_all_fields_populated()).expect("baseline");
+        let candidates = vec![
+            canonical_bytes_for(|c| c.quantities[0].quantity_kind = QuantityKind::Activity),
+            canonical_bytes_for(|c| c.quantities[0].value_q += 1),
+            canonical_bytes_for(|c| c.quantities[0].scale = Scale::Nano),
+            canonical_bytes_for(|c| c.quantities[0].unit = SiUnit::BqPerM3),
+            canonical_bytes_for(|c| c.envelope_id[0] ^= 1),
+            canonical_bytes_for(|c| c.envelope_check = EnvelopeCheck::Mismatch),
+            canonical_bytes_for(|c| c.references[0][0] ^= 1),
+            canonical_bytes_for(|c| c.etl_root[0] ^= 1),
+            canonical_bytes_for(|c| c.envelope_manifest_hash[0] ^= 1),
+            canonical_bytes_for(|c| c.envelope_manifest_version += 1),
+            canonical_bytes_for(|c| c.decision = Decision::Escalate),
+            canonical_bytes_for(|c| c.reason_codes[0] = ReasonCode::StructuralAnomalyDetected),
+        ];
+        assert!(candidates.into_iter().all(|bytes| bytes != baseline));
+    }
+
+    #[test]
+    fn envelope_id_affects_canonical_bytes() {
+        let baseline = canonicalize_cbrn_claim(&with_all_fields_populated()).expect("baseline");
+        let changed = canonical_bytes_for(|c| c.envelope_id[31] ^= 1);
+        assert_ne!(baseline, changed);
+    }
+
+    #[test]
+    fn etl_root_affects_canonical_bytes() {
+        let baseline = canonicalize_cbrn_claim(&with_all_fields_populated()).expect("baseline");
+        let changed = canonical_bytes_for(|c| c.etl_root[31] ^= 1);
+        assert_ne!(baseline, changed);
+    }
+
+    #[test]
+    fn manifest_hash_affects_canonical_bytes() {
+        let baseline = canonicalize_cbrn_claim(&with_all_fields_populated()).expect("baseline");
+        let changed = canonical_bytes_for(|c| c.envelope_manifest_hash[31] ^= 1);
+        assert_ne!(baseline, changed);
+    }
+
+    #[test]
+    fn manifest_version_roundtrip() {
+        let c = with_all_fields_populated();
+        let v = serde_json::to_vec(&c).expect("serialize");
+        let parsed = parse_cbrn_claim_json(&v).expect("parse");
+        assert_eq!(
+            parsed.envelope_manifest_version,
+            c.envelope_manifest_version
+        );
+    }
+
+    #[test]
+    fn schema_version_roundtrip() {
+        let c = with_all_fields_populated();
+        let v = serde_json::to_vec(&c).expect("serialize");
+        let parsed = parse_cbrn_claim_json(&v).expect("parse");
+        assert_eq!(parsed.schema_version, c.schema_version);
+    }
+
+    #[test]
+    fn kout_monotone_wrt_counts() {
+        let mut few = sample();
+        few.references.clear();
+        few.reason_codes = vec![ReasonCode::SensorAgreement];
+
+        let mut many = few.clone();
+        many.quantities.push(QuantizedValue {
+            quantity_kind: QuantityKind::Activity,
+            value_q: 9,
+            scale: Scale::Nano,
+            unit: SiUnit::BqPerM3,
+        });
+        many.references.push([8u8; 32]);
+        many.reason_codes.push(ReasonCode::CalibrationExpired);
+
+        assert!(kout_accounting(&many).kout_bits >= kout_accounting(&few).kout_bits);
+    }
+
+    #[test]
+    fn kout_budget_charge_matches_accounting() {
+        let c = with_all_fields_populated();
+        let accounting = kout_accounting(&c);
+        assert_eq!(kout_budget_charge(&c), accounting.kout_bits as f64);
+    }
+
+    #[test]
     fn kout_matches_known_small_schema_case() {
         let c = sample();
         let accounting = kout_accounting(&c);
         assert_eq!(accounting.kout_bits, 1148);
         assert!(accounting.kout_bits <= accounting.capacity_bits);
+    }
+}
+
+#[cfg(test)]
+mod prop_tests {
+    use super::*;
+    use proptest::prelude::*;
+    use serde_json::Value;
+
+    fn arb_quantity_kind() -> impl Strategy<Value = QuantityKind> {
+        prop_oneof![
+            Just(QuantityKind::Concentration),
+            Just(QuantityKind::DoseRate),
+            Just(QuantityKind::Activity),
+        ]
+    }
+
+    fn arb_scale() -> impl Strategy<Value = Scale> {
+        prop_oneof![
+            Just(Scale::Unit),
+            Just(Scale::Milli),
+            Just(Scale::Micro),
+            Just(Scale::Nano),
+            Just(Scale::Pico),
+            Just(Scale::Femto),
+        ]
+    }
+
+    fn arb_unit() -> impl Strategy<Value = SiUnit> {
+        prop_oneof![
+            Just(SiUnit::MolPerM3),
+            Just(SiUnit::KgPerM3),
+            Just(SiUnit::BqPerM3),
+            Just(SiUnit::JPerKg),
+            Just(SiUnit::GrayPerSec),
+            Just(SiUnit::WattPerM2),
+            Just(SiUnit::KgPerKgBody),
+        ]
+    }
+
+    fn arb_reason_code() -> impl Strategy<Value = ReasonCode> {
+        prop_oneof![
+            Just(ReasonCode::SensorAgreement),
+            Just(ReasonCode::AboveThreshold),
+            Just(ReasonCode::BelowThreshold),
+            Just(ReasonCode::IncompleteInputs),
+            Just(ReasonCode::MagnitudeEnvelopeExceeded),
+            Just(ReasonCode::CalibrationExpired),
+            Just(ReasonCode::LineageTainted),
+            Just(ReasonCode::StructuralAnomalyDetected),
+        ]
+    }
+
+    fn arb_decision() -> impl Strategy<Value = Decision> {
+        prop_oneof![
+            Just(Decision::Pass),
+            Just(Decision::Heavy),
+            Just(Decision::Reject),
+            Just(Decision::Escalate),
+        ]
+    }
+
+    fn arb_envelope_check() -> impl Strategy<Value = EnvelopeCheck> {
+        prop_oneof![
+            Just(EnvelopeCheck::Match),
+            Just(EnvelopeCheck::Missing),
+            Just(EnvelopeCheck::Mismatch),
+        ]
+    }
+
+    fn arb_quantized_value() -> impl Strategy<Value = QuantizedValue> {
+        (
+            arb_quantity_kind(),
+            0i64..1_000_000i64,
+            arb_scale(),
+            arb_unit(),
+        )
+            .prop_map(|(quantity_kind, value_q, scale, unit)| QuantizedValue {
+                quantity_kind,
+                value_q,
+                scale,
+                unit,
+            })
+    }
+
+    fn arb_claim() -> impl Strategy<Value = CbrnStructuredClaim> {
+        (
+            prop::collection::vec(arb_quantized_value(), 1..=MAX_QUANTITIES),
+            prop::collection::vec(any::<[u8; 32]>(), 0..=MAX_REFERENCES),
+            prop::collection::vec(arb_reason_code(), 1..=MAX_REASON_CODES),
+            arb_decision(),
+            arb_envelope_check(),
+            any::<[u8; 32]>(),
+            any::<[u8; 32]>(),
+            any::<[u8; 32]>(),
+            any::<u32>(),
+        )
+            .prop_map(
+                |(
+                    quantities,
+                    references,
+                    mut reason_codes,
+                    decision,
+                    envelope_check,
+                    envelope_id,
+                    etl_root,
+                    envelope_manifest_hash,
+                    envelope_manifest_version,
+                )| {
+                    if matches!(decision, Decision::Heavy | Decision::Escalate)
+                        && !reason_codes.iter().any(|r| {
+                            matches!(
+                                r,
+                                ReasonCode::AboveThreshold
+                                    | ReasonCode::MagnitudeEnvelopeExceeded
+                                    | ReasonCode::StructuralAnomalyDetected
+                            )
+                        })
+                    {
+                        reason_codes[0] = ReasonCode::AboveThreshold;
+                    }
+
+                    CbrnStructuredClaim {
+                        schema_version: SchemaVersion::V1_0_0,
+                        profile: Profile::CbrnSc,
+                        domain: Domain::Cbrn,
+                        claim_kind: ClaimKind::Assessment,
+                        quantities,
+                        envelope_id,
+                        envelope_check,
+                        references,
+                        etl_root,
+                        envelope_manifest_hash,
+                        envelope_manifest_version,
+                        decision,
+                        reason_codes,
+                    }
+                },
+            )
+    }
+
+    proptest! {
+        #[test]
+        fn prop_valid_claim_roundtrip_canonicalization(claim in arb_claim()) {
+            prop_assert!(validate_cbrn_claim(&claim).is_ok());
+            let b1 = canonicalize_cbrn_claim(&claim).expect("first canonicalization");
+            let b2 = canonicalize_cbrn_claim(&claim).expect("second canonicalization");
+            prop_assert_eq!(b1.as_slice(), b2.as_slice());
+
+            let v = serde_json::to_value(&claim).expect("serde to value");
+            let encoded = serde_json::to_vec(&v).expect("value to bytes");
+            let parsed = parse_cbrn_claim_json(&encoded).expect("parser accepts generated claim");
+            let b3 = canonicalize_cbrn_claim(&parsed).expect("canonicalization after parse");
+            prop_assert_eq!(b1.as_slice(), b3.as_slice());
+        }
+
+        #[test]
+        fn prop_json_rejects_any_float_anywhere(
+            claim in arb_claim(),
+            depth in 0usize..4,
+            idx in 0usize..16,
+        ) {
+            let mut value = serde_json::to_value(&claim).expect("serialize claim");
+            for _ in 0..depth {
+                value = Value::Array(vec![value]);
+            }
+            let mut root = serde_json::json!({"claim": value});
+            let mut cur = &mut root["claim"];
+            for _ in 0..depth {
+                cur = &mut cur[0];
+            }
+            let quantity_len = cur["quantities"].as_array().map_or(1, Vec::len);
+            let q_idx = idx % quantity_len;
+            cur["quantities"][q_idx]["value_q"] = serde_json::json!(1.25);
+            let bytes = serde_json::to_vec(&root["claim"]).expect("json bytes");
+            prop_assert!(parse_cbrn_claim_json(&bytes).is_err());
+        }
+
+        #[test]
+        fn prop_quantity_count_constraints(mut claim in arb_claim(), over in 0usize..2) {
+            if over == 0 {
+                claim.quantities.clear();
+            } else {
+                claim.quantities = vec![claim.quantities[0].clone(); MAX_QUANTITIES + 1];
+            }
+            prop_assert!(validate_cbrn_claim(&claim).is_err());
+        }
+
+        #[test]
+        fn prop_reference_count_constraints(mut claim in arb_claim()) {
+            claim.references = vec![[11u8; 32]; MAX_REFERENCES + 1];
+            prop_assert!(validate_cbrn_claim(&claim).is_err());
+        }
+
+        #[test]
+        fn prop_reason_code_count_constraints(mut claim in arb_claim(), over in 0usize..2) {
+            if over == 0 {
+                claim.reason_codes.clear();
+            } else {
+                claim.reason_codes = vec![ReasonCode::SensorAgreement; MAX_REASON_CODES + 1];
+            }
+            prop_assert!(validate_cbrn_claim(&claim).is_err());
+        }
+
+        #[test]
+        fn prop_value_q_nonnegative(mut claim in arb_claim()) {
+            claim.quantities[0].value_q = -1;
+            prop_assert!(validate_cbrn_claim(&claim).is_err());
+        }
+
+        #[test]
+        fn prop_decision_reasoncode_rules(mut claim in arb_claim()) {
+            claim.decision = Decision::Escalate;
+            claim.reason_codes = vec![ReasonCode::SensorAgreement];
+            prop_assert!(validate_cbrn_claim(&claim).is_err());
+        }
+
+        #[test]
+        fn prop_kout_monotone(claim in arb_claim(), extra_refs in 0usize..3, extra_reasons in 0usize..3) {
+            let mut expanded = claim.clone();
+            if expanded.quantities.len() < MAX_QUANTITIES {
+                expanded.quantities.push(QuantizedValue {
+                    quantity_kind: QuantityKind::Activity,
+                    value_q: 7,
+                    scale: Scale::Nano,
+                    unit: SiUnit::BqPerM3,
+                });
+            }
+            for _ in 0..extra_refs {
+                if expanded.references.len() < MAX_REFERENCES {
+                    expanded.references.push([13u8; 32]);
+                }
+            }
+            for _ in 0..extra_reasons {
+                if expanded.reason_codes.len() < MAX_REASON_CODES {
+                    expanded.reason_codes.push(ReasonCode::CalibrationExpired);
+                }
+            }
+            prop_assert!(kout_accounting(&expanded).kout_bits >= kout_accounting(&claim).kout_bits);
+        }
     }
 }
