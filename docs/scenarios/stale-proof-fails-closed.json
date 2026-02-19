@@ -1,0 +1,6 @@
+{
+  "id": "stale-proof-fails-closed",
+  "description": "Stale ETL proof checks fail closed during verification routines.",
+  "scenario_type": "safe-defense",
+  "claim_name": null
+}

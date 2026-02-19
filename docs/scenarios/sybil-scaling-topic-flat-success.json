@@ -1,0 +1,6 @@
+{
+  "id": "sybil-scaling-topic-flat-success",
+  "description": "Sybil scaling pressure remains topic-bounded with flat success probability.",
+  "scenario_type": "safe-defense",
+  "claim_name": null
+}

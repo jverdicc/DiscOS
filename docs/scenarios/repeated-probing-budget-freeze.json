@@ -1,0 +1,6 @@
+{
+  "id": "repeated-probing-budget-freeze",
+  "description": "Repeated probing attempts trigger bounded outcomes and budget freeze behavior checks.",
+  "scenario_type": "safe-defense",
+  "claim_name": null
+}

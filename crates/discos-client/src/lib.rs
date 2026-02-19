@@ -222,6 +222,14 @@ impl DiscosClient {
             .map_err(|e| ClientError::Kernel(e.to_string()))
     }
 
+    pub async fn get_server_info(&mut self) -> Result<pb::GetServerInfoResponse, ClientError> {
+        self.inner
+            .get_server_info(pb::GetServerInfoRequest {})
+            .await
+            .map(|r| r.into_inner())
+            .map_err(|e| ClientError::Kernel(e.to_string()))
+    }
+
     pub async fn get_public_key(&mut self) -> Result<pb::GetPublicKeyResponse, ClientError> {
         self.inner
             .get_public_key(pb::GetPublicKeyRequest {})
