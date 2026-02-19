@@ -31,9 +31,9 @@ use discos_client::{
 };
 use discos_core::{
     structured_claims::{
-        canonicalize_cbrn_claim, validate_cbrn_claim, CbrnStructuredClaim, ClaimKind, Decision,
-        Domain, EnvelopeCheck, Profile, QuantityKind, QuantizedValue, ReasonCode, Scale,
-        SchemaVersion, SiUnit,
+        canonicalize_cbrn_claim, parse_cbrn_claim_json, validate_cbrn_claim, CbrnStructuredClaim,
+        ClaimKind, Decision, Domain, EnvelopeCheck, Profile, QuantityKind, QuantizedValue,
+        ReasonCode, Scale, SchemaVersion, SiUnit,
     },
     topicid::{compute_topic_id, ClaimMetadata, TopicSignals},
 };
@@ -124,6 +124,10 @@ enum ClaimCommand {
         claim_id: String,
         #[arg(long, default_value_t = false)]
         verify_etl: bool,
+    },
+    ValidateStructured {
+        #[arg(long)]
+        input: PathBuf,
     },
 }
 
@@ -510,6 +514,24 @@ async fn main() -> anyhow::Result<()> {
                         serde_json::json!({"capsule_len": resp.capsule.len(), "etl_index": resp.etl_index})
                     );
                 }
+            }
+            ClaimCommand::ValidateStructured { input } => {
+                let bytes = fs::read(&input)
+                    .with_context(|| format!("read structured claim {}", input.display()))?;
+                let claim = parse_cbrn_claim_json(&bytes)
+                    .map_err(|e| anyhow!("invalid structured claim json: {e}"))?;
+                validate_cbrn_claim(&claim)
+                    .map_err(|e| anyhow!("invalid structured claim semantics: {e}"))?;
+                let canonical = canonicalize_cbrn_claim(&claim)
+                    .map_err(|e| anyhow!("failed to canonicalize structured claim: {e}"))?;
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "ok": true,
+                        "canonical_len": canonical.len(),
+                        "decision": format!("{:?}", claim.decision).to_lowercase()
+                    })
+                );
             }
         },
         Command::WatchRevocations => {

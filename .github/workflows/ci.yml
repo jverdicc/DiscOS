@@ -23,6 +23,11 @@ jobs:
       - name: Verify EvidenceOS proto sync
         run: ./scripts/check_evidenceos_proto_sync.sh
 
+      - name: Install coverage and fuzz tooling
+        run: |
+          cargo install cargo-llvm-cov --locked
+          cargo install cargo-fuzz --locked
+
       - name: Run format, clippy, tests, coverage evidence script
         run: ./scripts/test_evidence.sh
 
