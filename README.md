@@ -1,8 +1,8 @@
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18676016.svg)](https://zenodo.org/records/18685556)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18685556.svg)](https://doi.org/10.5281/zenodo.18685556)
 
 # DiscOS (Rust)
 
-DiscOS is the untrusted userland client and builder for EvidenceOS.
+DiscOS is the untrusted discovery/client/tooling layer for EvidenceOS. EvidenceOS is the verifier daemon and policy boundary; DiscOS is the operator-facing interface that builds claim artifacts, computes deterministic metadata, submits lifecycle RPCs, and retrieves verifiable outputs.
 
 ## Quickstart
 
@@ -27,9 +27,11 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 health
 ## Claim lifecycle commands
 
 ```bash
-# Create a claim and local artifacts
+# Create a local claim workspace + manifests, compute a local topic_id, and call create_claim_v2
 cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 \
-  claim create --claim-id demo-1 --lane cbrn --alpha-micros 50000 --epoch-config-ref epoch/v1
+  claim create --claim-name demo-1 --lane cbrn --alpha-micros 50000 \
+  --epoch-config-ref epoch/v1 --output-schema-id cbrn-sc.v1 \
+  --holdout-ref holdout/default --epoch-size 1024 --oracle-num-symbols 1024 --access-credit 100000
 
 # Commit wasm + manifests
 cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 \
@@ -38,7 +40,8 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 \
   --manifests .discos/claims/demo-1/phys_hir.json \
   --manifests .discos/claims/demo-1/causal_dsl.json
 
-# Seal and execute
+# Freeze, seal, and execute
+cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 claim freeze --claim-id demo-1
 cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 claim seal --claim-id demo-1
 cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 claim execute --claim-id demo-1
 
@@ -54,21 +57,25 @@ Simulation/attack tooling remains feature-gated under `sim`.
 
 ## Technical Summary
 
-EvidenceOS + DiscOS are designed as a split system: a constrained verification kernel and an untrusted, ergonomics-first userland. EvidenceOS is the kernel-like daemon that enforces protocol rules, verifies manifests, executes deterministic claim workflows, applies statistical guardrails, and writes auditable state transitions. DiscOS is the userland toolchain (CLI, builders, manifests, fetch tooling) that helps operators assemble claims and interact with the daemon over stable IPC/gRPC surfaces. This split is intentional: userland can move quickly, but certification-critical decisions are made by a narrow verifier boundary.
+DiscOS and EvidenceOS are intentionally split into two trust domains. EvidenceOS is the long-lived daemon that enforces policy, validates inputs, executes deterministic claim transitions, and writes auditable state. DiscOS is the rapidly iterated userland that helps humans and automation discover protocol surfaces, assemble claims, and operate workflows without expanding the trusted computing base. In practice, this means operators can improve UX and orchestration in DiscOS while relying on EvidenceOS to make final accept/reject decisions at a narrow, auditable boundary.
 
-At the center of that boundary is the ASPEC verifier. ASPEC defines structured admissibility and execution constraints for claim artifacts, including manifest coherence, deterministic execution preconditions, and policy-compatible evidence packaging. In practice, DiscOS prepares inputs, but EvidenceOS decides whether those inputs satisfy ASPEC and can be advanced through commit/seal/execute/capsule stages. The trust model is therefore not "trust the client"; it is "trust only what the verifier can re-check."
+From an architecture standpoint, DiscOS behaves like a protocol-aware client toolkit. The CLI and libraries generate claim artifacts (WASM payloads and manifests), construct claim metadata, derive deterministic identifiers (for example TopicID inputs), and call EvidenceOS gRPC endpoints in lifecycle order (`create -> commit -> freeze -> seal -> execute -> fetch`). EvidenceOS does not trust those client-side artifacts by assertion alone; it re-checks constraints server-side before transitioning state. That separation is key to interoperability: any compatible client can submit claims, but only verifier-accepted claims become certified outputs.
 
-Statistical outputs are handled through oracle quantization and e-values. Oracles produce signals that are quantized into protocol-governed representations so downstream checks are stable and machine-verifiable. EvidenceOS then evaluates test evidence using e-value semantics to preserve auditable error control under sequential operation. The design goal is that claims cannot be strengthened by presentation tricks alone: the quantized record and resulting e-values are what drive acceptance logic.
+Structured claims are represented using the CBRN-SC profile and canonically serialized for stable hashing and replay. DiscOS validates and canonicalizes claim JSON before submission and persistence, ensuring semantically equivalent claims map to a deterministic byte representation. The canonical schema identifier is `cbrn-sc.v1`, matching EvidenceOS expectations for output schema metadata and reducing ambiguity across services, logs, and downstream analytics. Where older aliases exist, DiscOS normalizes to this canonical ID before building claim metadata so that topic derivation and server RPC metadata remain consistent.
 
-Conservation Ledger rules add a certification barrier: once evidence mass, risk budget, and lane constraints are booked, transitions must conserve those invariants across lifecycle operations. This prevents hidden state inflation between "looks plausible" and "certifiable." Passing this barrier means the claim has satisfied protocol requirements for certification within the configured policy envelope; failing it blocks progression regardless of narrative quality.
+`k_out` accounting is treated as a first-class safety mechanism rather than an optional metric. DiscOS computes structured-claim complexity/size-derived bits via deterministic accounting functions (`kout_accounting`, `kout_bits`, `kout_budget_charge`) and tests monotonic behavior across claim growth. EvidenceOS then applies conservation-ledger style checks to enforce budget constraints over time. The practical effect is that claim complexity contributes to an explicit resource budget, which helps prevent unbounded evidence inflation and creates machine-checkable limits for automated policy.
 
-The ETL (Evidence Transparency Log) provides append-only accountability for published artifacts and state transitions. Capsules can be accompanied by inclusion proofs (showing an item is in a committed tree/log view), consistency proofs (showing log growth without rewriting history), and revocation records when previously issued material must be superseded or withdrawn. Operators and relying parties can verify these proofs independently, reducing dependence on any single service operator's assertion.
+ETL (Evidence Transparency Log) integration ties claim outputs to append-only accountability. Structured claims include ETL roots and envelope material (`envelope_id`, `envelope_manifest_hash`, and manifest version) so relying parties can verify that a capsule’s evidence lineage and envelope bindings are consistent with logged state. In end-to-end tests, DiscOS chains parse/validate/canonicalize, `k_out` accounting, ledger charging, ETL append, inclusion-proof generation, inclusion verification, and tamper detection. This pipeline demonstrates the intended deployment model: DiscOS assembles and verifies locally for operator confidence, while EvidenceOS supplies authoritative adjudication plus transparent, independently checkable log proofs.
 
-A capsule is the canonical, portable output bundle for a claim: it includes structured claim content, verifier-relevant metadata, commitments/proofs, and references needed for independent replay checks. Structured claims are canonicalized before commitment so semantically equivalent inputs map to stable byte-level encodings and hashes. This canonicalization is what allows reproducible verification, deterministic signatures/commitments, and robust comparison across systems.
+## Reproducibility
 
-Certification in this stack means protocol conformance under declared assumptions, not a blanket legal, clinical, or regulatory approval. A certified capsule indicates that EvidenceOS accepted the claim against ASPEC/policy constraints and logged the result with transparency artifacts. It does not, by itself, guarantee real-world efficacy outside model scope, replace domain-specific review, or waive jurisdictional obligations.
+For reproducible local verification of formatting, linting, tests, coverage, and fuzz smoke checks, run:
 
-For citation, reference the project DOI shown at the top of this README and include the exact version/record you relied on. If you cite both software and manuscript context, distinguish implementation DOI metadata from paper claims and note version dates. Current manuscript status: **Under review at FORC 2026**.
+```bash
+scripts/test_evidence.sh
+```
+
+The script is the project’s canonical CI-like local validation path.
 
 ## License
 

@@ -19,3 +19,8 @@ cargo llvm-cov --workspace --all-features --lcov --output-path "$ARTIFACT_DIR/co
   cd fuzz
   cargo fuzz run fuzz_structured_claims_canonical -- -max_total_time=20
 ) | tee "$ARTIFACT_DIR/fuzz_structured_claims_canonical.txt"
+(
+  cd fuzz
+  cargo fuzz run fuzz_structured_claim_parse_canonicalize -- -max_total_time=10
+) | tee "$ARTIFACT_DIR/fuzz_structured_claim_parse_canonicalize.txt"
+
