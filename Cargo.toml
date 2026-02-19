@@ -12,7 +12,9 @@ members = [
 ]
 
 [workspace.package]
+authors = ["Joseph Verdicchio", "DiscOS Contributors"]
 version = "0.1.0"
+description = "DiscOS untrusted userland client and builder for EvidenceOS"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/<your-org>/DiscOS"
