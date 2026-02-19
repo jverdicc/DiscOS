@@ -46,6 +46,24 @@ jobs:
           path: artifacts/ci/
           if-no-files-found: error
 
+  openclaw_plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build and check OpenClaw plugin
+        working-directory: integrations/openclaw-plugin
+        run: |
+          npm ci
+          npm run check
+          npm run build
+          npm test
+
   system:
     runs-on: ubuntu-latest
     env:
