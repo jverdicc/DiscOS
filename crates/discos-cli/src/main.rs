@@ -25,6 +25,7 @@ use discos_builder::{
     build_restricted_wasm, manifest_hash, sha256, AlphaHIRManifest, CausalDSLManifest,
     PhysHIRManifest,
 };
+use discos_cli::capsule::build_capsule_print_summary;
 use discos_client::{
     pb, verify_consistency, verify_inclusion, verify_sth_signature, ConsistencyProof, DiscosClient,
     InclusionProof, SignedTreeHead,
@@ -141,6 +142,8 @@ enum ClaimCommand {
         claim_id: String,
         #[arg(long, default_value_t = false)]
         verify_etl: bool,
+        #[arg(long, default_value_t = false)]
+        print_capsule_json: bool,
     },
     ValidateStructured {
         #[arg(long)]
@@ -563,6 +566,7 @@ async fn main() -> anyhow::Result<()> {
             ClaimCommand::FetchCapsule {
                 claim_id,
                 verify_etl,
+                print_capsule_json,
             } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
                 let resp = client
@@ -570,7 +574,7 @@ async fn main() -> anyhow::Result<()> {
                         claim_id: hex_decode_bytes(&claim_id)?,
                     })
                     .await?;
-                if verify_etl {
+                let mut output = if verify_etl {
                     let cache_path = cache_file_path();
                     let cache_entry_key = cache_key(&args.endpoint, &args.kernel_pubkey_hex);
                     let mut cache = load_sth_cache(&cache_path)?;
@@ -646,16 +650,18 @@ async fn main() -> anyhow::Result<()> {
 
                     persist_sth_cache(&cache_path, &cache)?;
 
-                    println!(
-                        "{}",
-                        serde_json::json!({"capsule_len": resp.capsule.len(), "inclusion_ok": inclusion_ok, "consistency_ok": consistency_ok})
-                    );
+                    serde_json::json!({"capsule_len": resp.capsule.len(), "inclusion_ok": inclusion_ok, "consistency_ok": consistency_ok})
                 } else {
-                    println!(
-                        "{}",
-                        serde_json::json!({"capsule_len": resp.capsule.len(), "etl_index": resp.etl_index})
-                    );
+                    serde_json::json!({"capsule_len": resp.capsule.len(), "etl_index": resp.etl_index})
+                };
+
+                if print_capsule_json {
+                    let capsule_json: serde_json::Value = serde_json::from_slice(&resp.capsule)
+                        .context("capsule is not valid json")?;
+                    output["capsule_summary"] = build_capsule_print_summary(&capsule_json);
                 }
+
+                println!("{}", output);
             }
             ClaimCommand::ValidateStructured { input } => {
                 let bytes = fs::read(&input)
