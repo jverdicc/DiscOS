@@ -302,13 +302,12 @@ fn parse_attempt_from_status(identity: &str, status: &Status) -> Option<AttemptR
 
 async fn wait_for_health(endpoint: &str) {
     for _ in 0..30 {
-        match pb::evidence_os_client::EvidenceOsClient::connect(endpoint.to_string()).await {
-            Ok(mut client) => {
-                if client.health(pb::HealthRequest {}).await.is_ok() {
-                    return;
-                }
+        if let Ok(mut client) =
+            pb::evidence_os_client::EvidenceOsClient::connect(endpoint.to_string()).await
+        {
+            if client.health(pb::HealthRequest {}).await.is_ok() {
+                return;
             }
-            Err(_) => {}
         }
         sleep(Duration::from_millis(50)).await;
     }
