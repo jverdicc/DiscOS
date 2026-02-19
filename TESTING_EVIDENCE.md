@@ -74,3 +74,18 @@ GitHub Actions uploads:
 
 - `discos-ci-artifacts` from `artifacts/ci/`
 - `system-test-artifacts` from `artifacts/system-test/`
+
+
+## Structured claims focused commands
+
+Run targeted structured-claims unit + proptest + integration coverage:
+
+```bash
+cargo test -p discos-core structured_claims
+cargo test -p discos-core --test structured_claims_end_to_end
+```
+
+Coverage notes:
+
+- Property-based coverage for structured claims is implemented under `crates/discos-core/src/structured_claims.rs` in `mod prop_tests`.
+- System-style pipeline coverage is implemented in `crates/discos-core/tests/structured_claims_end_to_end.rs`, chaining parse → validate → canonicalize → kout accounting/budget → ledger charge → ETL append → inclusion proof verify (+ tamper failure).
