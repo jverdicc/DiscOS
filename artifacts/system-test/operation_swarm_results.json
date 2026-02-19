@@ -1,0 +1,7 @@
+{
+  "n_clients": 25,
+  "n_total_attempts": 25,
+  "first_escalation_at_attempt": 4,
+  "final_state": "REJECT",
+  "final_k_remaining": 0.0
+}
