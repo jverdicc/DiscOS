@@ -82,6 +82,8 @@ For the full architecture and protocol summary, see the EvidenceOS README: <http
 
 Simulation experiments live under `crates/discos-core/src/experiments/` and are exercised by `tests/experiments_integration.rs` behind the `sim` feature flag.
 
+Topic budget numeric invariant: **all budgets and charges must be finite real numbers**.
+
 ```bash
 cargo test --features sim --test experiments_integration
 ```

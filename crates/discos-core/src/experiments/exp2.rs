@@ -40,6 +40,10 @@ pub struct Exp2Result {
 }
 
 pub async fn run_exp2(cfg: &Exp2Config) -> anyhow::Result<Exp2Result> {
+    if !cfg.joint_budget_bits.is_finite() {
+        anyhow::bail!("joint_budget_bits must be finite");
+    }
+
     let standard_successes = cfg.n_trials;
     let evidenceos_successes =
         ((cfg.n_trials as f64) * (2f64.powf(-cfg.joint_budget_bits / 4.0))) as usize;
