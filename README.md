@@ -4,6 +4,8 @@
 
 DiscOS is the untrusted discovery/client/tooling layer for EvidenceOS. EvidenceOS is the verifier daemon and policy boundary; DiscOS is the operator-facing interface that builds claim artifacts, computes deterministic metadata, submits lifecycle RPCs, and retrieves verifiable outputs.
 
+➡️ EvidenceOS repository: <https://github.com/evidenceos/evidenceos>
+
 Compatibility target is documented in [`COMPATIBILITY.md`](COMPATIBILITY.md).
 
 ## Quickstart
