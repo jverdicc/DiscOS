@@ -11,6 +11,8 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 serde_json = "1"
 discos-core = { path = "../crates/discos-core" }
+discos-client = { path = "../crates/discos-client" }
+prost = "0.13"
 
 [[bin]]
 name = "fuzz_structured_claims_json"
@@ -29,6 +31,13 @@ bench = false
 [[bin]]
 name = "fuzz_structured_claim_parse_canonicalize"
 path = "fuzz_targets/fuzz_structured_claim_parse_canonicalize.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_client_grpc_response_state_machine"
+path = "fuzz_targets/fuzz_client_grpc_response_state_machine.rs"
 test = false
 doc = false
 bench = false
