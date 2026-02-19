@@ -5,10 +5,10 @@ DiscOS tracks the EvidenceOS public protocol surface using a **vendored protocol
 ## Current compatibility target
 
 - **DiscOS workspace version:** `0.1.0`
-- **EvidenceOS upstream repository:** `https://github.com/evidenceos/evidenceos.git`
+- **EvidenceOS upstream repository:** `https://github.com/EvidenceOS/evidenceos.git`
 - **Override upstream for forks/mirrors:** set `EVIDENCEOS_REPO` when running checks (example: `EVIDENCEOS_REPO=$HOME/src/evidenceos ./scripts/check_evidenceos_proto_sync.sh`)
 - **EvidenceOS compatibility revision:** `3f8b95a6615874d80526e447cb33ad0396b079f4`
-- **Protocol package:** `evidenceos.v1` (from `crates/evidenceos-protocol/proto/evidenceos.proto`)
+- **Protocol package:** `evidenceos.v1` with `*V2` RPC/message surfaces enabled for public daemon interoperability (from `crates/evidenceos-protocol/proto/evidenceos.proto`)
 
 ## Enforcement
 
@@ -26,3 +26,8 @@ When upgrading compatibility to a newer EvidenceOS public release:
 4. Update `discos-client`/`discos-cli` call sites if message or RPC signatures changed.
 5. Update this file with the new DiscOS↔EvidenceOS mapping.
 6. Run `make test-evidence` and `./scripts/system_test.sh`.
+
+## Actionable sync failure output
+
+- `./scripts/check_evidenceos_proto_sync.sh` now prints the exact directory diff plus copy/sync remediation commands when protocol drift is detected.
+- Default upstream points to the public EvidenceOS repository above; override remains available via `EVIDENCEOS_REPO`.

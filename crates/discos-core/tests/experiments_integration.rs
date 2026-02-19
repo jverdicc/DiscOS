@@ -55,6 +55,25 @@ async fn exp11_topichash_resists_sybil_at_20_identities() {
     let r = run_exp11(&Exp11Config::default())
         .await
         .expect("exp11 runs");
+    let expected = 3.8147e-06_f64;
     let last = r.rows.last().expect("exp11 has at least one row");
-    assert!(last.topichash_success_prob < last.naive_success_prob);
+    assert!((last.topichash_success_prob - expected).abs() < 1e-10);
+
+    let base = r
+        .rows
+        .first()
+        .expect("exp11 has at least one row")
+        .topichash_success_prob;
+    let max_deviation = r
+        .rows
+        .iter()
+        .map(|row| (row.topichash_success_prob - base).abs())
+        .fold(0.0_f64, f64::max);
+    assert!(max_deviation < 1e-12);
+
+    assert!(r
+        .rows
+        .windows(2)
+        .all(|w| w[1].naive_success_prob >= w[0].naive_success_prob));
+    assert!(last.naive_success_prob >= 1.0 - 1e-12);
 }

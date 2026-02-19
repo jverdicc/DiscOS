@@ -18,6 +18,20 @@ use sha2::{Digest, Sha256};
 const TOPIC_DOMAIN: &[u8] = b"evidenceos/topicid/v1";
 const SEMANTIC_PHYS_HIR_ESCALATION_DISTANCE: u32 = 128;
 
+pub const CANONICAL_OUTPUT_SCHEMA_ID: &str = "cbrn-sc.v1";
+pub const OUTPUT_SCHEMA_ID_ALIASES: &[&str] = &["schema/v1", "cbrn_sc.v1", "cbrn-sc-v1"];
+
+pub fn canonicalize_output_schema_id(schema_id: &str) -> String {
+    if schema_id == CANONICAL_OUTPUT_SCHEMA_ID
+        || OUTPUT_SCHEMA_ID_ALIASES
+            .iter()
+            .any(|alias| alias.eq_ignore_ascii_case(schema_id))
+    {
+        return CANONICAL_OUTPUT_SCHEMA_ID.to_string();
+    }
+    schema_id.to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ClaimMetadata {
     pub lane: String,
@@ -126,7 +140,7 @@ mod tests {
             lane: "high_assurance".to_string(),
             alpha_micros: 50_000,
             epoch_config_ref: "epoch/default".to_string(),
-            output_schema_id: "cbrn-sc.v1".to_string(),
+            output_schema_id: CANONICAL_OUTPUT_SCHEMA_ID.to_string(),
         };
 
         let case1 = compute_topic_id(

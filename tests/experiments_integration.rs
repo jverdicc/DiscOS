@@ -63,7 +63,18 @@ async fn exp11_topichash_resists_sybil_at_20_identities() {
     let r = run_exp11(&Exp11Config::default())
         .await
         .expect("exp11 should run deterministically");
+    let expected = 3.8147e-06_f64;
     let last = r.rows.last().expect("exp11 rows should be non-empty");
-    assert!(last.topichash_success_prob < 1e-4);
-    assert!(last.naive_success_prob > 0.99);
+    assert!((last.topichash_success_prob - expected).abs() < 1e-10);
+
+    let base = r.rows.first().expect("exp11 rows should be non-empty").topichash_success_prob;
+    let max_deviation = r
+        .rows
+        .iter()
+        .map(|row| (row.topichash_success_prob - base).abs())
+        .fold(0.0_f64, f64::max);
+    assert!(max_deviation < 1e-12, "TopicHash must be constant across identities");
+
+    assert!(r.rows.windows(2).all(|w| w[1].naive_success_prob >= w[0].naive_success_prob));
+    assert!(last.naive_success_prob >= 1.0 - 1e-12);
 }
