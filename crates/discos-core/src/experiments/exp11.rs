@@ -46,14 +46,30 @@ pub struct Exp11Result {
 }
 
 pub async fn run_exp11(cfg: &Exp11Config) -> anyhow::Result<Exp11Result> {
+    if cfg.secret_bits == 0 {
+        anyhow::bail!("secret_bits must be greater than zero");
+    }
+    if !cfg.topic_budget_bits.is_finite() {
+        anyhow::bail!("topic_budget_bits must be finite");
+    }
+    if cfg.topic_budget_bits < 0.0 {
+        anyhow::bail!("topic_budget_bits must be non-negative");
+    }
+
     let mut rows = Vec::new();
+    let base_topichash = 2f64.powf(-((cfg.secret_bits as f64) - cfg.topic_budget_bits));
+
     for i in 1..=cfg.max_identities {
-        let naive = 1.0 - (1.0 - 2f64.powi(-(cfg.secret_bits as i32))).powi(i as i32 * 50);
-        let topichash = (2f64.powf(-cfg.topic_budget_bits)).powi(i as i32);
+        let naive = if i >= cfg.secret_bits {
+            1.0
+        } else {
+            2f64.powf(-((cfg.secret_bits - i) as f64))
+        };
+
         rows.push(Exp11Row {
             n_identities: i,
             naive_success_prob: naive,
-            topichash_success_prob: topichash,
+            topichash_success_prob: base_topichash,
         });
     }
     Ok(Exp11Result { rows })

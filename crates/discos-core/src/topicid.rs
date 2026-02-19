@@ -17,22 +17,9 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 pub use evidenceos_core::topicid::{
-    compute_topic_id, ClaimMetadata, EscalationReason, TopicComputation, TopicSignals,
+    canonicalize_output_schema_id, compute_topic_id, ClaimMetadata, EscalationReason,
+    TopicComputation, TopicSignals, CANONICAL_OUTPUT_SCHEMA_ID, OUTPUT_SCHEMA_ID_ALIASES,
 };
-
-pub const CANONICAL_OUTPUT_SCHEMA_ID: &str = "cbrn-sc.v1";
-pub const OUTPUT_SCHEMA_ID_ALIASES: &[&str] = &["schema/v1", "cbrn_sc.v1", "cbrn-sc-v1"];
-
-pub fn canonicalize_output_schema_id(schema_id: &str) -> String {
-    if schema_id == CANONICAL_OUTPUT_SCHEMA_ID
-        || OUTPUT_SCHEMA_ID_ALIASES
-            .iter()
-            .any(|alias| alias.eq_ignore_ascii_case(schema_id))
-    {
-        return CANONICAL_OUTPUT_SCHEMA_ID.to_string();
-    }
-    schema_id.to_string()
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TopicBudget {

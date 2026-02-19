@@ -4,12 +4,35 @@ set -euo pipefail
 ADDR="${EVIDENCEOS_DAEMON_ADDR:-http://127.0.0.1:50051}"
 BIN="${EVIDENCEOS_DAEMON_BIN:-evidenceos-daemon}"
 LISTEN="${ADDR#http://}"
+REV="${EVIDENCEOS_REV:-3f8b95a6615874d80526e447cb33ad0396b079f4}"
+REPO="${EVIDENCEOS_REPO:-https://github.com/EvidenceOS/evidenceos.git}"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_DIR="artifacts/system-test/${TS}"
 DATA_DIR="${OUT_DIR}/data"
 LOG_FILE="${OUT_DIR}/daemon.log"
 
 mkdir -p "${DATA_DIR}" "${OUT_DIR}"
+
+resolve_daemon_bin() {
+  if [[ -x "${BIN}" ]]; then
+    echo "${BIN}"
+    return
+  fi
+
+  if command -v "${BIN}" >/dev/null 2>&1; then
+    command -v "${BIN}"
+    return
+  fi
+
+  local vendor_dir="${OUT_DIR}/EvidenceOS"
+  echo "evidenceos-daemon not found; cloning ${REPO}@${REV} for system test" >&2
+  git clone --quiet "${REPO}" "${vendor_dir}"
+  git -C "${vendor_dir}" checkout --quiet "${REV}"
+  cargo build --manifest-path "${vendor_dir}/Cargo.toml" --bin evidenceos-daemon --release >/dev/null
+  echo "${vendor_dir}/target/release/evidenceos-daemon"
+}
+
+BIN="$(resolve_daemon_bin)"
 
 run_json() {
   local outfile="$1"
