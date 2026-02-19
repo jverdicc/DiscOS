@@ -35,7 +35,7 @@ use discos_core::{
         ClaimKind, Decision, Domain, EnvelopeCheck, Profile, QuantityKind, QuantizedValue,
         ReasonCode, Scale, SchemaVersion, SiUnit,
     },
-    topicid::{compute_topic_id, ClaimMetadata, TopicSignals},
+    topicid::{canonicalize_output_schema_id, compute_topic_id, ClaimMetadata, TopicSignals},
 };
 use tokio_stream::StreamExt;
 use tracing_subscriber::EnvFilter;
@@ -251,6 +251,7 @@ async fn main() -> anyhow::Result<()> {
                 oracle_num_symbols,
                 access_credit,
             } => {
+                let output_schema_id = canonicalize_output_schema_id(&output_schema_id);
                 let dir = claim_dir(&claim_name);
                 fs::create_dir_all(&dir)?;
 
@@ -332,7 +333,7 @@ async fn main() -> anyhow::Result<()> {
                             lane,
                             alpha_micros,
                             epoch_config_ref,
-                            output_schema_id: "cbrn-sc.v1".into(),
+                            output_schema_id,
                         }),
                         signals: Some(pb::TopicSignalsV2 {
                             semantic_hash: vec![],

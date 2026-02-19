@@ -51,7 +51,7 @@ fi
 run_json "${OUT_DIR}/create_a.json" \
   cargo run --quiet -p discos-cli -- --endpoint "${ADDR}" claim create \
   --claim-name claim-a --alpha-micros 50000 --lane high_assurance --epoch-config-ref epoch/default \
-  --output-schema-id schema/v1 --holdout-ref holdout/default --epoch-size 1 --oracle-num-symbols 4 --access-credit 1
+  --output-schema-id cbrn-sc.v1 --holdout-ref holdout/default --epoch-size 1 --oracle-num-symbols 4 --access-credit 1
 
 CLAIM_A="$(python - <<'PY' "${OUT_DIR}/create_a.json"
 import json,sys

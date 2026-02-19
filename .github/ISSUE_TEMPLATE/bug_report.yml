@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible problem in DiscOS.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please provide enough detail for deterministic reproduction.
+
+  - type: input
+    id: version
+    attributes:
+      label: DiscOS version / commit SHA
+      placeholder: e.g., v0.1.0-alpha or abc1234
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened vs what you expected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Include exact commands and inputs.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      render: shell
+
+  - type: checkboxes
+    id: validation
+    attributes:
+      label: Validation checklist
+      options:
+        - label: I tested this as a black-box scenario (observable inputs/outputs).
+          required: true
+        - label: I included boundary or edge-case conditions in reproduction.
+          required: true
+        - label: I confirmed behavior is deterministic (or provided seed/details if not).
+          required: true
+        - label: I verified this is not caused by copy-paste duplicated logic in my local changes.
+          required: true

@@ -126,7 +126,7 @@ mod tests {
             lane: "high_assurance".to_string(),
             alpha_micros: 50_000,
             epoch_config_ref: "epoch/default".to_string(),
-            output_schema_id: "schema/v1".to_string(),
+            output_schema_id: "cbrn-sc.v1".to_string(),
         };
 
         let case1 = compute_topic_id(
@@ -139,7 +139,7 @@ mod tests {
         );
         assert_eq!(
             case1.topic_id_hex,
-            "64a97ddb6625437a9f95b855d49d7838720e11725c9471a26e29f1fb8dba7539"
+            "4eb8d76b7cbf85d9f8e4359496f8a31de8dbf17f90ec81ba35b6b14c188bb8f8"
         );
 
         let case2 = compute_topic_id(
@@ -152,7 +152,7 @@ mod tests {
         );
         assert_eq!(
             case2.topic_id_hex,
-            "939bdca9f8e380f5f74a9af688db90e4de82661465a8e3014f033061a1f6eab3"
+            "8ef5438eccde65e7c6e7f73cb4d6ca56420a34dbe8f5eeb13a41ea31682d4904"
         );
     }
 
