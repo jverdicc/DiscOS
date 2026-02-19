@@ -70,6 +70,7 @@ message CreateClaimV2Request {
   uint32 epoch_size = 5;
   uint32 oracle_num_symbols = 6;
   uint64 access_credit = 7;
+  string oracle_id = 8;
 }
 
 message CreateClaimV2Response { bytes claim_id = 1; bytes topic_id = 2; }

@@ -4,7 +4,7 @@ set -euo pipefail
 ADDR="${EVIDENCEOS_DAEMON_ADDR:-http://127.0.0.1:50051}"
 BIN="${EVIDENCEOS_DAEMON_BIN:-evidenceos-daemon}"
 LISTEN="${ADDR#http://}"
-REV="${EVIDENCEOS_REV:-3f8b95a6615874d80526e447cb33ad0396b079f4}"
+REV="${EVIDENCEOS_REV:-4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af}"
 REPO="${EVIDENCEOS_REPO:-https://github.com/EvidenceOS/evidenceos.git}"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_DIR="artifacts/system-test/${TS}"

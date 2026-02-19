@@ -212,11 +212,11 @@ impl pb::evidence_os_server::EvidenceOs for BenchDaemon {
         Ok(Response::new(pb::GetServerInfoResponse {
             proto_hash: "test-proto-hash".into(),
             protocol_package: "evidenceos.v1".into(),
-            git_commit: "3f8b95a6615874d80526e447cb33ad0396b079f4".into(),
+            git_commit: "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af".into(),
             build_timestamp: "2026-01-01T00:00:00Z".into(),
             key_ids: vec!["k1".into()],
-            compatibility_min_rev: "3f8b95a6615874d80526e447cb33ad0396b079f4".into(),
-            compatibility_max_rev: "3f8b95a6615874d80526e447cb33ad0396b079f4".into(),
+            compatibility_min_rev: "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af".into(),
+            compatibility_max_rev: "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af".into(),
         }))
     }
 
@@ -277,6 +277,7 @@ impl BenchContext {
                     epoch_size: 1,
                     oracle_num_symbols: 1,
                     access_credit: 1,
+                    oracle_id: "default".to_string(),
                 })
                 .await
                 .expect("create benchmark claim");

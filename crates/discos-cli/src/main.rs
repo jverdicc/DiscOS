@@ -42,8 +42,10 @@ use tokio_stream::StreamExt;
 use tracing_subscriber::EnvFilter;
 
 const CACHE_FILE_NAME: &str = "sth_cache.json";
-const DEFAULT_EVIDENCEOS_REV: &str = "3f8b95a6615874d80526e447cb33ad0396b079f4";
+const DEFAULT_EVIDENCEOS_REV: &str = "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af";
 const EXPECTED_PROTOCOL_PACKAGE: &str = "evidenceos.v1";
+const DEFAULT_ORACLE_ID: &str = "default";
+const MAX_ORACLE_ID_LEN: usize = 128;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 struct CachedSth {
@@ -116,6 +118,8 @@ enum ClaimCommand {
         oracle_num_symbols: u32,
         #[arg(long)]
         access_credit: u64,
+        #[arg(long, default_value = DEFAULT_ORACLE_ID)]
+        oracle_id: String,
     },
     Commit {
         #[arg(long)]
@@ -149,6 +153,24 @@ enum ClaimCommand {
         #[arg(long)]
         input: PathBuf,
     },
+}
+
+fn validate_oracle_id(oracle_id: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(!oracle_id.is_empty(), "oracle_id must not be empty");
+    anyhow::ensure!(
+        oracle_id.len() <= MAX_ORACLE_ID_LEN,
+        "oracle_id must be at most {MAX_ORACLE_ID_LEN} bytes"
+    );
+
+    for ch in oracle_id.chars() {
+        anyhow::ensure!(ch.is_ascii(), "oracle_id must be ASCII");
+        anyhow::ensure!(
+            !(ch.is_ascii_whitespace() || ch.is_ascii_control()),
+            "oracle_id must not contain whitespace or control characters"
+        );
+    }
+
+    Ok(())
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -394,7 +416,9 @@ async fn main() -> anyhow::Result<()> {
                 epoch_size,
                 oracle_num_symbols,
                 access_credit,
+                oracle_id,
             } => {
+                validate_oracle_id(&oracle_id)?;
                 let output_schema_id = canonicalize_output_schema_id(&output_schema_id);
                 let dir = claim_dir(&claim_name);
                 fs::create_dir_all(&dir)?;
@@ -488,8 +512,16 @@ async fn main() -> anyhow::Result<()> {
                         epoch_size,
                         oracle_num_symbols,
                         access_credit,
+                        oracle_id: oracle_id.clone(),
                     })
-                    .await?;
+                    .await
+                    .map_err(|e| {
+                        anyhow!(
+                            "create_claim_v2 failed for oracle_id `{}`: {}",
+                            oracle_id,
+                            e
+                        )
+                    })?;
                 println!(
                     "{}",
                     serde_json::json!({"claim_id": hex_encode(&resp.claim_id), "topic_id": hex_encode(&resp.topic_id), "local_topic_id": topic.topic_id_hex })
@@ -704,6 +736,7 @@ async fn main() -> anyhow::Result<()> {
 mod tests {
     use super::*;
     use discos_client::{merkle_leaf_hash, ConsistencyProof};
+    use proptest::prelude::*;
 
     fn merkle_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
         let mut material = Vec::with_capacity(65);
@@ -765,6 +798,33 @@ mod tests {
         let wasm_bytes = b"exact wasm bytes from file";
         let expected = discos_builder::sha256(wasm_bytes);
         assert_eq!(wasm_hash_for_bytes(wasm_bytes), expected);
+    }
+
+    #[test]
+    fn oracle_id_validation_accepts_valid_and_rejects_invalid() {
+        assert!(validate_oracle_id("acme.safety.v1").is_ok());
+        assert!(validate_oracle_id("").is_err());
+        assert!(validate_oracle_id("has space").is_err());
+        assert!(validate_oracle_id(
+            "line
+feed"
+        )
+        .is_err());
+        assert!(validate_oracle_id("ünicode").is_err());
+        assert!(validate_oracle_id(&"a".repeat(MAX_ORACLE_ID_LEN + 1)).is_err());
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn oracle_id_fuzz_never_panics_and_rejects_illegal_forms(input in proptest::collection::vec(any::<u8>(), 0..256)) {
+            let candidate = String::from_utf8_lossy(&input).into_owned();
+            let outcome = validate_oracle_id(&candidate);
+            let legal = !candidate.is_empty()
+                && candidate.len() <= MAX_ORACLE_ID_LEN
+                && candidate.chars().all(|ch| ch.is_ascii() && !(ch.is_ascii_whitespace() || ch.is_ascii_control()));
+
+            prop_assert_eq!(outcome.is_ok(), legal);
+        }
     }
 
     #[test]

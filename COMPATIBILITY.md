@@ -7,7 +7,7 @@ DiscOS tracks the EvidenceOS public protocol surface using a **vendored protocol
 - **DiscOS workspace version:** `0.1.0`
 - **EvidenceOS upstream repository:** `https://github.com/EvidenceOS/evidenceos.git`
 - **Override upstream for forks/mirrors:** set `EVIDENCEOS_REPO` when running checks (example: `EVIDENCEOS_REPO=$HOME/src/evidenceos ./scripts/check_evidenceos_proto_sync.sh`)
-- **EvidenceOS compatibility revision:** `3f8b95a6615874d80526e447cb33ad0396b079f4`
+- **EvidenceOS compatibility revision:** `4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af`
 - **Protocol package:** `evidenceos.v1` with `*V2` RPC/message surfaces enabled for public daemon interoperability (from `crates/evidenceos-protocol/proto/evidenceos.proto`)
 
 ## Enforcement
@@ -31,3 +31,9 @@ When upgrading compatibility to a newer EvidenceOS public release:
 
 - `./scripts/check_evidenceos_proto_sync.sh` now prints the exact directory diff plus copy/sync remediation commands when protocol drift is detected.
 - Default upstream points to the public EvidenceOS repository above; override remains available via `EVIDENCEOS_REPO`.
+
+
+## Protocol change notes
+
+- Added `CreateClaimV2Request.oracle_id` to support EvidenceOS pluggable/external oracle selection from DiscOS submissions.
+- Compatibility revision bumped to `4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af` and sync checks updated accordingly.

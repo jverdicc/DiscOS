@@ -10,6 +10,13 @@ pub struct PolicyOracleReceipt {
     pub manifest_hash_hex: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct OracleMetadata {
+    pub oracle_id: String,
+    pub oracle_resolution_hash: String,
+    pub oracle_manifest_hash: String,
+}
+
 pub fn build_capsule_print_summary(capsule: &Value) -> Value {
     let schema = capsule
         .get("schema")
@@ -24,6 +31,7 @@ pub fn build_capsule_print_summary(capsule: &Value) -> Value {
         .unwrap_or(Value::Array(Vec::new()));
 
     let receipts = extract_policy_oracle_receipts(capsule);
+    let oracle_metadata = extract_oracle_metadata(capsule);
 
     serde_json::json!({
         "capsule": {
@@ -33,6 +41,7 @@ pub fn build_capsule_print_summary(capsule: &Value) -> Value {
             "decision": decision,
             "reason_codes": reason_codes,
         },
+        "oracle": oracle_metadata,
         "policy_oracle_receipts": receipts,
     })
 }
@@ -55,6 +64,14 @@ pub fn extract_policy_oracle_receipts(capsule: &Value) -> Vec<PolicyOracleReceip
             manifest_hash_hex: string_field(receipt, "manifest_hash_hex"),
         })
         .collect()
+}
+
+pub fn extract_oracle_metadata(capsule: &Value) -> OracleMetadata {
+    OracleMetadata {
+        oracle_id: string_field(capsule, "oracle_id"),
+        oracle_resolution_hash: string_field(capsule, "oracle_resolution_hash"),
+        oracle_manifest_hash: string_field(capsule, "oracle_manifest_hash"),
+    }
 }
 
 fn string_field(obj: &Value, key: &str) -> String {

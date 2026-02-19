@@ -40,7 +40,8 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 health
 CREATE_OUTPUT="$(cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 \
   claim create --claim-name demo-1 --lane cbrn --alpha-micros 50000 \
   --epoch-config-ref epoch/v1 --output-schema-id cbrn-sc.v1 \
-  --holdout-ref holdout/default --epoch-size 1024 --oracle-num-symbols 1024 --access-credit 100000)"
+  --holdout-ref holdout/default --epoch-size 1024 --oracle-num-symbols 1024 --access-credit 100000 \
+  --oracle-id default)"
 echo "$CREATE_OUTPUT"
 
 # Output shape:
@@ -68,6 +69,21 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 \
 cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 watch-revocations
 ```
 
+
+### External pluggable oracle bundles
+
+DiscOS now supports selecting the EvidenceOS oracle at submission time via `--oracle-id` on `claim create`.
+
+1. Package and load your oracle bundle in EvidenceOS (restricted wasm + manifest) using your daemon deployment tooling.
+2. Register/activate the bundle under an id (example: `acme.safety.v1`).
+3. Reference that id from DiscOS:
+
+```bash
+cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051   claim create --claim-name demo-external --lane cbrn --alpha-micros 50000   --epoch-config-ref epoch/v1 --output-schema-id cbrn-sc.v1   --holdout-ref holdout/default --epoch-size 1024 --oracle-num-symbols 1024   --access-credit 100000 --oracle-id acme.safety.v1
+```
+
+See `examples/external_oracle_wasm/README.md` for the full example flow.
+
 ## Policy Oracles (Super Judges)
 
 Policy oracles ("Super Judges") are configured server-side in EvidenceOS policy and are surfaced back to DiscOS as optional `policy_oracle_receipts` entries inside the fetched claim capsule JSON.
@@ -92,6 +108,11 @@ Expected output includes a compact `capsule_summary` section with top-level deci
       "e_value": 0.125,
       "decision": "defer",
       "reason_codes": ["SJ_DEFER"]
+    },
+    "oracle": {
+      "oracle_id": "acme.safety.v1",
+      "oracle_resolution_hash": "...",
+      "oracle_manifest_hash": "..."
     },
     "policy_oracle_receipts": [
       {

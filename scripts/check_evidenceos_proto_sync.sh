@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PINNED_REV="${EVIDENCEOS_REV:-3f8b95a6615874d80526e447cb33ad0396b079f4}"
+PINNED_REV="${EVIDENCEOS_REV:-4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af}"
 UPSTREAM_REPO="${EVIDENCEOS_REPO:-https://github.com/EvidenceOS/evidenceos.git}"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT

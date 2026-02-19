@@ -481,6 +481,7 @@ dependencies = [
  "discos-builder",
  "discos-client",
  "discos-core",
+ "proptest",
  "serde",
  "serde_json",
  "tempfile",
