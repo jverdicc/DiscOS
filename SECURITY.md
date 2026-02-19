@@ -1,29 +1,33 @@
-# Security Policy
+# Security Policy: EvidenceOS & UVP
 
-## Reporting a vulnerability
+As a protocol designed to mitigate high-stakes AI risks (including CBRN), we take security with extreme seriousness. We appreciate the efforts of the security research community to help us harden the Universal Verification Protocol kernel.
 
-Please do **not** report security issues in public GitHub issues.
+## Supported Versions
+Currently, only the latest release on the `main` branch is supported for security updates.
 
-Instead, report potential vulnerabilities privately to the maintainers listed in
-[`MAINTAINERS.md`](./MAINTAINERS.md) with the subject line: `DiscOS security report`.
+| Version | Supported          |
+| ------- | ------------------ |
+| 0.1.x   | :white_check_mark: |
+| < 0.1.0 | :x:                |
 
-Include:
+## Reporting a Vulnerability
+**Do not open a public GitHub Issue for security vulnerabilities.**
 
-- Affected component(s) and version(s)
-- Reproduction steps or proof-of-concept
-- Potential impact
-- Any proposed mitigations
+If you discover a security flaw—particularly one that allows for "Adaptivity Leakage" bypass, "Sealed Vault" escape, or "Ledger Wealth" spoofing—please report it privately.
 
-We will acknowledge reports promptly and work with you on coordinated disclosure.
+**Contact:** [Your Email Address]
+**GPG Key:** [Optional: Your PGP Key ID]
 
-## Scope
+Please include:
+1. A detailed description of the vulnerability.
+2. Steps to reproduce (Proof of Concept).
+3. The potential impact on the Conservation Ledger's safety bounds.
 
-This policy covers the DiscOS repository contents and release artifacts.
+## Our Commitment
+* **Acknowledgment:** We will acknowledge your report within 48 hours.
+* **Triage:** We will provide a preliminary assessment of the risk within 7 days.
+* **Fix:** We aim to resolve critical vulnerabilities within 90 days.
+* **Disclosure:** We follow Coordinated Vulnerability Disclosure (CVD). We ask that you do not disclose the vulnerability publicly until a fix is released.
 
-## Disclosure process
-
-1. Triage and validate the report.
-2. Identify impacted versions and remediation plan.
-3. Prepare and test a fix.
-4. Coordinate disclosure timing with reporter when feasible.
-5. Publish advisory and patched release notes.
+## Safe Harbor
+If you act in good faith, follow this policy, and do not attempt to exfiltrate sensitive data or disrupt production systems, we will not pursue legal action against you for your research.
