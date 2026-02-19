@@ -51,3 +51,9 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 watch-revocations
 ```
 
 Simulation/attack tooling remains feature-gated under `sim`.
+
+## License
+
+DiscOS is licensed under the Apache License, Version 2.0. See [`LICENSE`](./LICENSE) for
+the full license text and [`NOTICE`](./NOTICE) for attribution notices distributed with the
+project.
