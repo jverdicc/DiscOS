@@ -68,6 +68,46 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 \
 cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 watch-revocations
 ```
 
+## Policy Oracles (Super Judges)
+
+Policy oracles ("Super Judges") are configured server-side in EvidenceOS policy and are surfaced back to DiscOS as optional `policy_oracle_receipts` entries inside the fetched claim capsule JSON.
+
+You can request a capsule summary that includes policy oracle receipts with:
+
+```bash
+cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 \
+  claim fetch-capsule --claim-id "$CLAIM_ID" --print-capsule-json
+```
+
+Expected output includes a compact `capsule_summary` section with top-level decision data and normalized receipt rows:
+
+```json
+{
+  "capsule_len": 1234,
+  "etl_index": 42,
+  "capsule_summary": {
+    "capsule": {
+      "schema": "evidenceos.claim-capsule.v1",
+      "certified": true,
+      "e_value": 0.125,
+      "decision": "defer",
+      "reason_codes": ["SJ_DEFER"]
+    },
+    "policy_oracle_receipts": [
+      {
+        "oracle_id": "super-judge-1",
+        "decision": "veto",
+        "reason_code": "SJ_VETO",
+        "wasm_hash_hex": "...",
+        "manifest_hash_hex": "..."
+      }
+    ]
+  }
+}
+```
+
+If a capsule does not include `policy_oracle_receipts` (older servers/policies), DiscOS prints `"policy_oracle_receipts": []` for backward compatibility.
+
 ## Technical Summary
 
 ## Plain-English: What DiscOS does for you
