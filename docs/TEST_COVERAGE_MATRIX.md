@@ -60,3 +60,5 @@ Chained in `end_to_end_claim_roundtrip_and_kout_and_etl` (NEW):
 | evalue (or canonical EvidenceOS evalue path) | `crates/discos-core/src/evalue.rs` unit tests | `crates/discos-core/tests/property_spaces.rs` | `tests/experiments_integration.rs` |
 | client ETL verification path (`leaf_index`, `tree_size`) | `crates/discos-client/tests/verify_capsule.rs` | `fuzz/fuzz_targets/fuzz_client_grpc_response_state_machine.rs` | `crates/discos-client/tests/e2e_against_daemon_v2.rs`, `scripts/system_test.sh` |
 | compatibility handshake (`proto_hash`, `protocol_package`, `rev window`) | `crates/discos-cli/src/main.rs` unit checks | `crates/discos-client/tests/proto_compat.rs` | `scripts/system_test.sh` server-info assertion |
+
+| probe simulation demo (`claims`, `unique_hashes`, `topics`) | `scripts/probe_simulation.sh` deterministic argument parsing + summary generation | n/a | `crates/discos-client/tests/probe_simulation_integration.rs`, `scripts/system_test.sh` (`probe-sim/` artifacts) |

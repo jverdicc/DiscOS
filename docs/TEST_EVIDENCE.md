@@ -30,3 +30,29 @@ DiscOS uses a repo-level evidence harness mirroring EvidenceOS-style CI gates.
 
 - Coverage tooling uses `cargo-llvm-cov`; install it in CI/runner images.
 - This harness is designed to be machine-consumable and stable across runs.
+
+## Probe simulation (distillation-like) demo
+
+Run against a live daemon:
+
+```bash
+./scripts/probe_simulation.sh --endpoint http://127.0.0.1:50051 --claims 200 --unique-hashes 200 --topics 10 --require-controls
+```
+
+Fast integration coverage (mock daemon + artifact assertions):
+
+```bash
+cargo test -p discos-client --test probe_simulation_integration
+```
+
+Expected deterministic artifact filenames:
+
+- `artifacts/probe-sim/probe_simulation_summary.json`
+- `artifacts/probe-sim/probe_simulation_requests.jsonl`
+- `artifacts/probe-sim/probe_simulation_human.txt`
+
+When run through `./scripts/system_test.sh`, probe artifacts are written under:
+
+- `artifacts/system-test/<timestamp>/probe-sim/probe_simulation_summary.json`
+- `artifacts/system-test/<timestamp>/probe-sim/probe_simulation_requests.jsonl`
+- `artifacts/system-test/<timestamp>/probe-sim/probe_simulation_human.txt`

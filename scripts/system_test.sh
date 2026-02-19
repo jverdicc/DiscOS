@@ -129,6 +129,9 @@ assert isinstance(fetch.get('consistency_ok'), bool), 'consistency check flag mi
 print('system test assertions passed')
 PY
 
+
+./scripts/probe_simulation.sh --endpoint "${ADDR}" --claims 12 --unique-hashes 12 --topics 3 --artifact-dir "${OUT_DIR}/probe-sim" --require-controls
+
 cargo test -p discos-client --test e2e_against_daemon_v2 -- --ignored | tee "${OUT_DIR}/daemon_contract_test.log" >/dev/null
 cargo test -p discos-builder --test evidenceos_vault_system -- --ignored | tee "${OUT_DIR}/builder_vault_system_test.log" >/dev/null
 

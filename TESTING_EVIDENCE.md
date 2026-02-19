@@ -103,3 +103,23 @@ Coverage notes:
 
 - Property-based coverage for structured claims is implemented under `crates/discos-core/src/structured_claims.rs` in `mod prop_tests`.
 - System-style pipeline coverage is implemented in `crates/discos-core/tests/structured_claims_end_to_end.rs`, chaining parse → validate → canonicalize → kout accounting/budget → ledger charge → ETL append → inclusion proof verify (+ tamper failure).
+
+## Probe simulation (distillation-like) demo
+
+Run:
+
+```bash
+./scripts/probe_simulation.sh --endpoint http://127.0.0.1:50051 --claims 200 --unique-hashes 200 --topics 10 --require-controls
+```
+
+Integration guard (mock daemon + deterministic artifact checks):
+
+```bash
+cargo test -p discos-client --test probe_simulation_integration
+```
+
+Deterministic filenames produced by the probe demo:
+
+- `probe_simulation_summary.json`
+- `probe_simulation_requests.jsonl`
+- `probe_simulation_human.txt`

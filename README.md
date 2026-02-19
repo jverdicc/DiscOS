@@ -68,6 +68,12 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 watch-revocations
 
 ## Technical Summary
 
+## Plain-English: What DiscOS does for you
+
+DiscOS is the operator-facing client and experimentation layer. It is untrusted by design: it can move fast and evolve without widening the trusted boundary. EvidenceOS stays small, strict, and auditable; DiscOS prepares claims deterministically, submits lifecycle RPCs, and verifies returned evidence.
+
+If you want to see how a verifier behaves under probing (many interactions that adapt over time), DiscOS is the harness: it can run stress-test simulations, generate structured claims, and exercise system tests that produce artifacts you can publish.
+
 ## Why Rust for the Userland Bridge?
 
 Most AI agent ecosystems are Python-first, and DiscOS embraces that at the orchestration layer. But the bridge that sits between adversarial workloads and verifier RPC boundaries is implemented in Rust on purpose.
@@ -152,14 +158,16 @@ DiscOS is licensed under the Apache License, Version 2.0. See [`LICENSE`](./LICE
 the full license text and [`NOTICE`](./NOTICE) for attribution notices distributed with the
 project.
 
-## What-if Scenarios (Safe)
+## What-if Scenarios (Defensive Demonstrations)
 
-| Scenario | Expected outcome | Command | Evidence artifact |
-| --- | --- | --- | --- |
-| repeated probing attempts | PASS: budget freeze / bounded defensive behavior | `cargo run -p discos-cli -- scenario run repeated-probing-budget-freeze` | `artifacts/scenarios/repeated-probing-budget-freeze/result.json` |
-| sybil scaling | PASS: topic-bounded flat success trend | `cargo run -p discos-cli -- scenario run sybil-scaling-topic-flat-success` | `artifacts/scenarios/sybil-scaling-topic-flat-success/result.json` |
-| stale proof replay | FAIL closed during ETL verification path | `cargo run -p discos-cli -- scenario run stale-proof-fails-closed --verify-etl` | `artifacts/scenarios/stale-proof-fails-closed/result.json` |
-| downgrade mismatch | FAIL: DiscOS refuses incompatible daemon | `cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 server-info` | `artifacts/system-test/*/server_info.json` |
+- **Threat / probe pattern:** Missing or invalid auth token on lifecycle RPCs. **Expected verifier response:** `REJECT`. **How to reproduce:** run your EvidenceOS auth-enabled system checks and compare with DiscOS system-test output conventions in `scripts/system_test.sh` (JSON artifacts + stderr capture).
+- **Threat / probe pattern:** Schema alias drift attempt (same meaning, different alias strings). **Expected verifier response:** `PASS` with canonical topic convergence. **How to reproduce:** `cargo test -p discos-core --test schema_alias_convergence`.
+- **Threat / probe pattern:** Oversized/invalid payload decode pressure (malformed structured claims, non-finite numeric encodings). **Expected verifier response:** `REJECT`. **How to reproduce:** `./scripts/system_test.sh` (checks invalid vectors) and `cargo test -p discos-core --test exp2_non_finite`.
+- **Threat / probe pattern:** ETL tamper or inclusion/consistency proof mismatch. **Expected verifier response:** `REJECT` (verification fails closed). **How to reproduce:** `cargo test -p discos-client --test verify_capsule`.
+- **Threat / probe pattern:** Distillation-like high-volume probing with varying deterministic claim/topic buckets. **Expected verifier response:** `THROTTLE`, then `ESCALATE`/`FROZEN` depending on daemon policy. **How to reproduce:** `./scripts/probe_simulation.sh --endpoint http://127.0.0.1:50051 --claims 200 --unique-hashes 200 --topics 10 --require-controls`.
+- **Threat / probe pattern:** Compatibility downgrade mismatch (proto hash/package/revision window drift). **Expected verifier response:** `REJECT`. **How to reproduce:** `cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 server-info`.
+- **Threat / probe pattern:** Repeated probing budget exhaustion against bounded topic controls. **Expected verifier response:** `FROZEN`. **How to reproduce:** `cargo run -p discos-cli -- scenario run repeated-probing-budget-freeze`.
+- **Threat / probe pattern:** Sybil-style scaling over topic-flat identities. **Expected verifier response:** `THROTTLE`/bounded success trend (no unbounded gains). **How to reproduce:** `cargo run -p discos-cli -- scenario run sybil-scaling-topic-flat-success`.
 
 ## Reproduce scenario evidence
 
