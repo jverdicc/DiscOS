@@ -1,0 +1,41 @@
+name: Good first issue
+description: Suggest a beginner-friendly contribution task.
+title: "[Good First Issue]: "
+labels:
+  - good first issue
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: Task description
+      description: Clear, scoped description of the work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete, testable criteria for completion.
+    validations:
+      required: true
+
+  - type: textarea
+    id: starter
+    attributes:
+      label: Starter guidance
+      description: Suggested files/modules, commands, and references.
+
+  - type: checkboxes
+    id: testing
+    attributes:
+      label: Required test checklist
+      options:
+        - label: Includes at least one black-box verification step.
+          required: true
+        - label: Covers boundary behavior.
+          required: true
+        - label: Confirms deterministic behavior (or states why not applicable).
+          required: true
+        - label: Avoids copy-paste logic by reusing existing patterns where possible.
+          required: true
