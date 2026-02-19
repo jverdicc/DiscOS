@@ -19,6 +19,20 @@ pub use evidenceos_core::topicid::{
     compute_topic_id, ClaimMetadata, EscalationReason, TopicComputation, TopicSignals,
 };
 
+pub const CANONICAL_OUTPUT_SCHEMA_ID: &str = "cbrn-sc.v1";
+pub const OUTPUT_SCHEMA_ID_ALIASES: &[&str] = &["schema/v1", "cbrn_sc.v1", "cbrn-sc-v1"];
+
+pub fn canonicalize_output_schema_id(schema_id: &str) -> String {
+    if schema_id == CANONICAL_OUTPUT_SCHEMA_ID
+        || OUTPUT_SCHEMA_ID_ALIASES
+            .iter()
+            .any(|alias| alias.eq_ignore_ascii_case(schema_id))
+    {
+        return CANONICAL_OUTPUT_SCHEMA_ID.to_string();
+    }
+    schema_id.to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TopicBudget {
     pub topic_id: [u8; 32],
@@ -122,7 +136,7 @@ mod tests {
             lane: "high_assurance".into(),
             alpha_micros: 50_000,
             epoch_config_ref: "epoch/default".into(),
-            output_schema_id: "schema/v1".into(),
+            output_schema_id: CANONICAL_OUTPUT_SCHEMA_ID.into(),
         }
     }
 
@@ -138,7 +152,7 @@ mod tests {
         );
         assert_eq!(
             result.topic_id_hex,
-            "64a97ddb6625437a9f95b855d49d7838720e11725c9471a26e29f1fb8dba7539"
+            "4eb8d76b7cbf85d9f8e4359496f8a31de8dbf17f90ec81ba35b6b14c188bb8f8"
         );
     }
 
@@ -154,8 +168,19 @@ mod tests {
         );
         assert_eq!(
             result.topic_id_hex,
-            "939bdca9f8e380f5f74a9af688db90e4de82661465a8e3014f033061a1f6eab3"
+            "8ef5438eccde65e7c6e7f73cb4d6ca56420a34dbe8f5eeb13a41ea31682d4904"
         );
+    }
+
+    #[test]
+    fn schema_aliases_normalize_to_canonical_id() {
+        assert_eq!(
+            canonicalize_output_schema_id(CANONICAL_OUTPUT_SCHEMA_ID),
+            CANONICAL_OUTPUT_SCHEMA_ID
+        );
+        for alias in OUTPUT_SCHEMA_ID_ALIASES {
+            assert_eq!(canonicalize_output_schema_id(alias), CANONICAL_OUTPUT_SCHEMA_ID);
+        }
     }
 
     #[test]
