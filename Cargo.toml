@@ -17,7 +17,7 @@ version = "0.1.0"
 description = "DiscOS untrusted userland client and builder for EvidenceOS"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/<your-org>/DiscOS"
+repository = "https://github.com/jverdicc/DiscOS"
 
 [workspace.dependencies]
 evidenceos-protocol = { path = "crates/evidenceos-protocol" }

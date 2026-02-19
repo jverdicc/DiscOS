@@ -28,6 +28,11 @@ const DOMAIN_WASM_HASH: &[u8] = b"evidenceos/wasm-code-hash/v1";
 const DOMAIN_MANIFEST_HASH: &[u8] = b"evidenceos/manifest-hash/v1";
 const PAYLOAD: &[u8] = &[0x01, 0x02, 0x03];
 
+pub const VAULT_IMPORT_MODULE: &str = "env";
+pub const VAULT_IMPORT_ORACLE_QUERY: &str = "oracle_query";
+pub const VAULT_IMPORT_EMIT_STRUCTURED_CLAIM: &str = "emit_structured_claim";
+pub const VAULT_IMPORT_GET_LOGICAL_EPOCH: &str = "get_logical_epoch";
+
 pub fn sha256(input: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(input);
@@ -49,6 +54,10 @@ pub struct WasmBuildOutput {
 }
 
 pub fn build_restricted_wasm() -> WasmBuildOutput {
+    build_restricted_wasm_with_payload(PAYLOAD)
+}
+
+pub fn build_restricted_wasm_with_payload(payload: &[u8]) -> WasmBuildOutput {
     let mut module = Module::new();
 
     let mut types = TypeSection::new();
@@ -63,15 +72,19 @@ pub fn build_restricted_wasm() -> WasmBuildOutput {
     module.section(&types);
 
     let mut imports = ImportSection::new();
-    imports.import("env", "oracle_query", wasm_encoder::EntityType::Function(0));
     imports.import(
-        "env",
-        "emit_structured_claim",
+        VAULT_IMPORT_MODULE,
+        VAULT_IMPORT_ORACLE_QUERY,
+        wasm_encoder::EntityType::Function(0),
+    );
+    imports.import(
+        VAULT_IMPORT_MODULE,
+        VAULT_IMPORT_EMIT_STRUCTURED_CLAIM,
         wasm_encoder::EntityType::Function(1),
     );
     imports.import(
-        "env",
-        "get_logical_epoch",
+        VAULT_IMPORT_MODULE,
+        VAULT_IMPORT_GET_LOGICAL_EPOCH,
         wasm_encoder::EntityType::Function(2),
     );
     module.section(&imports);
@@ -99,18 +112,18 @@ pub fn build_restricted_wasm() -> WasmBuildOutput {
     data.active(
         0,
         &wasm_encoder::ConstExpr::i32_const(0),
-        PAYLOAD.iter().copied(),
+        payload.iter().copied(),
     );
     module.section(&data);
 
     let mut code = CodeSection::new();
     let mut run = Function::new(vec![]);
     run.instruction(&Instruction::I32Const(0));
-    run.instruction(&Instruction::I32Const(PAYLOAD.len() as i32));
+    run.instruction(&Instruction::I32Const(payload.len() as i32));
     run.instruction(&Instruction::Call(0));
     run.instruction(&Instruction::Drop);
     run.instruction(&Instruction::I32Const(0));
-    run.instruction(&Instruction::I32Const(PAYLOAD.len() as i32));
+    run.instruction(&Instruction::I32Const(payload.len() as i32));
     run.instruction(&Instruction::Call(1));
     run.instruction(&Instruction::Call(2));
     run.instruction(&Instruction::Drop);
@@ -159,6 +172,7 @@ pub fn manifest_hash<T: Serialize>(value: &T) -> Result<[u8; 32], serde_json::Er
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
     use wasmparser::{ExternalKind, Parser, Payload, TypeRef};
 
     #[test]
@@ -232,17 +246,42 @@ mod tests {
             .any(|(m, n, is_func)| m == "env" && n == "get_logical_epoch" && *is_func));
 
         for (module, name, _) in imports {
-            assert_eq!(module, "env");
-            assert!(
-                ["oracle_query", "emit_structured_claim", "get_logical_epoch"]
-                    .contains(&name.as_str())
-            );
+            assert_eq!(module, VAULT_IMPORT_MODULE);
+            assert!([
+                VAULT_IMPORT_ORACLE_QUERY,
+                VAULT_IMPORT_EMIT_STRUCTURED_CLAIM,
+                VAULT_IMPORT_GET_LOGICAL_EPOCH,
+            ]
+            .contains(&name.as_str()));
         }
         for (name, kind) in exports {
             match (name.as_str(), kind) {
                 ("run", ExternalKind::Func) | ("memory", ExternalKind::Memory) => {}
                 _ => panic!("unexpected export"),
             }
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn random_payloads_have_deterministic_wasm_and_manifest_hash(payload in prop::collection::vec(any::<u8>(), 0..256)) {
+            let first = build_restricted_wasm_with_payload(&payload);
+            let second = build_restricted_wasm_with_payload(&payload);
+            prop_assert_eq!(first.wasm_bytes, second.wasm_bytes);
+            prop_assert_eq!(first.code_hash, second.code_hash);
+
+            let manifest_a = AlphaHIRManifest {
+                plan_id: "prop-plan".to_string(),
+                code_hash_hex: hex::encode(first.code_hash),
+                oracle_kinds: vec![VAULT_IMPORT_ORACLE_QUERY.to_string()],
+                output_schema_id: "cbrn-sc.v1".to_string(),
+                nullspec_id: "nullspec.v1".to_string(),
+            };
+            let manifest_b = manifest_a.clone();
+
+            let hash_a = manifest_hash(&manifest_a).map_err(|e| TestCaseError::fail(e.to_string()))?;
+            let hash_b = manifest_hash(&manifest_b).map_err(|e| TestCaseError::fail(e.to_string()))?;
+            prop_assert_eq!(hash_a, hash_b);
         }
     }
 }

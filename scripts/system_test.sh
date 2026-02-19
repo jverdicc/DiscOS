@@ -94,5 +94,6 @@ print('system test assertions passed')
 PY
 
 cargo test -p discos-client --test e2e_against_daemon_v2 -- --ignored | tee "${OUT_DIR}/daemon_contract_test.log" >/dev/null
+cargo test -p discos-builder --test evidenceos_vault_system -- --ignored | tee "${OUT_DIR}/builder_vault_system_test.log" >/dev/null
 
 echo "system test outputs at ${OUT_DIR}" | tee "${OUT_DIR}/summary.txt" >/dev/null
