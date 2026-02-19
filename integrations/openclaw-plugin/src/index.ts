@@ -34,6 +34,16 @@ export interface EvidenceGuardPluginConfig {
   auditLogger?: (event: AuditEvent) => void;
 }
 
+export interface ResolvedEvidenceGuardPluginConfig {
+  evidenceUrl: string;
+  timeoutMs: number;
+  circuitBreakerThreshold: number;
+  circuitBreakerResetMs: number;
+  failClosedRisk: "high-only" | "all";
+  highRiskTools: string[];
+  auditLogger: (event: AuditEvent) => void;
+}
+
 export interface AuditEvent {
   ts: string;
   toolName: string;
@@ -88,18 +98,7 @@ function hashParams(params: Record<string, unknown>): string {
 }
 
 export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) {
-  const config = {
-    timeoutMs: DEFAULT_TIMEOUT_MS,
-    circuitBreakerThreshold: DEFAULT_CIRCUIT_BREAKER_THRESHOLD,
-    circuitBreakerResetMs: DEFAULT_CIRCUIT_BREAKER_RESET_MS,
-    failClosedRisk: "high-only" as const,
-    highRiskTools: DEFAULT_HIGH_RISK_TOOLS,
-    auditLogger: (event: AuditEvent) => {
-      // Deterministic one-line JSON for machine ingestion.
-      console.log(JSON.stringify({ type: "evidenceos.audit", ...event }));
-    },
-    ...rawConfig,
-  };
+  const config = parseEvidenceGuardPluginConfig(rawConfig);
 
   let failures = 0;
   let circuitOpenedAt: number | null = null;
@@ -226,5 +225,22 @@ export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) 
         }
       },
     },
+  };
+}
+
+export function parseEvidenceGuardPluginConfig(
+  rawConfig: EvidenceGuardPluginConfig,
+): ResolvedEvidenceGuardPluginConfig {
+  return {
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+    circuitBreakerThreshold: DEFAULT_CIRCUIT_BREAKER_THRESHOLD,
+    circuitBreakerResetMs: DEFAULT_CIRCUIT_BREAKER_RESET_MS,
+    failClosedRisk: "high-only" as const,
+    highRiskTools: [...DEFAULT_HIGH_RISK_TOOLS],
+    auditLogger: (event: AuditEvent) => {
+      // Deterministic one-line JSON for machine ingestion.
+      console.log(JSON.stringify({ type: "evidenceos.audit", ...event }));
+    },
+    ...rawConfig,
   };
 }
