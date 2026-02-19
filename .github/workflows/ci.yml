@@ -29,8 +29,8 @@ jobs:
 
       - name: Install coverage and fuzz tooling
         run: |
-          cargo install cargo-llvm-cov --locked
-          cargo install cargo-fuzz --locked
+          cargo install cargo-llvm-cov --locked --force
+          cargo install cargo-fuzz --locked --force
 
       - name: Check coverage threshold drift
         run: ./scripts/check_coverage_threshold_drift.sh
