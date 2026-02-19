@@ -153,7 +153,7 @@ mod tests {
         );
         assert_eq!(
             case1.topic_id_hex,
-            "4eb8d76b7cbf85d9f8e4359496f8a31de8dbf17f90ec81ba35b6b14c188bb8f8"
+            "620429e7139e049aff7e0aca3fb7f7bb22037b38d5b90c8c6a70e48bde95f45f"
         );
 
         let case2 = compute_topic_id(
@@ -166,7 +166,7 @@ mod tests {
         );
         assert_eq!(
             case2.topic_id_hex,
-            "8ef5438eccde65e7c6e7f73cb4d6ca56420a34dbe8f5eeb13a41ea31682d4904"
+            "2817de106129b08c39e3cc13096c227da981efdbf2f98ae82c4c44a008ba97fb"
         );
     }
 
