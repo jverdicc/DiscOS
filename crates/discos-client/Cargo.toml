@@ -18,6 +18,7 @@ evidenceos-protocol.workspace = true
 
 [dev-dependencies]
 base64 = "0.22"
+criterion = "0.5"
 hex = "0.4"
 http = "1"
 prost = "0.13"
@@ -28,3 +29,7 @@ tempfile = "3"
 tokio-stream = "0.1"
 wasmparser = "0.220"
 wat = "1"
+
+[[bench]]
+name = "agent_overhead"
+harness = false
