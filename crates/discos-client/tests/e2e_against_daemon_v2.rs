@@ -5,6 +5,7 @@ use discos_client::{
     ConsistencyProof, DiscosClient, InclusionProof, SignedTreeHead,
 };
 use ed25519_dalek::{Signer, SigningKey};
+use sha2::Digest;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::{transport::Server, Request, Response, Status};
@@ -184,7 +185,7 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
     ) -> Result<Response<pb::RevokeClaimResponse>, Status> {
         Ok(Response::new(pb::RevokeClaimResponse { revoked: true }))
     }
-    type WatchRevocationsStream = tokio_stream::empty::Empty<Result<pb::RevocationEvent, Status>>;
+    type WatchRevocationsStream = tokio_stream::Empty<Result<pb::RevocationEvent, Status>>;
     async fn watch_revocations(
         &self,
         _: Request<pb::WatchRevocationsRequest>,

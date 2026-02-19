@@ -1,0 +1,30 @@
+[
+  {
+    "metadata": {
+      "lane": "high_assurance",
+      "alpha_micros": 50000,
+      "epoch_config_ref": "epoch/default",
+      "output_schema_id": "schema/v1"
+    },
+    "signals": {
+      "semantic_hash": "0707070707070707070707070707070707070707070707070707070707070707",
+      "phys_hir_signature_hash": "0707070707070707070707070707070707070707070707070707070707070707",
+      "dependency_merkle_root": null
+    },
+    "expected_topic_id_hex": "64a97ddb6625437a9f95b855d49d7838720e11725c9471a26e29f1fb8dba7539"
+  },
+  {
+    "metadata": {
+      "lane": "high_assurance",
+      "alpha_micros": 50000,
+      "epoch_config_ref": "epoch/default",
+      "output_schema_id": "schema/v1"
+    },
+    "signals": {
+      "semantic_hash": "0101010101010101010101010101010101010101010101010101010101010101",
+      "phys_hir_signature_hash": "0202020202020202020202020202020202020202020202020202020202020202",
+      "dependency_merkle_root": "0303030303030303030303030303030303030303030303030303030303030303"
+    },
+    "expected_topic_id_hex": "939bdca9f8e380f5f74a9af688db90e4de82661465a8e3014f033061a1f6eab3"
+  }
+]

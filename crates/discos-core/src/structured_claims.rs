@@ -347,13 +347,13 @@ pub fn parse_cbrn_claim_json(bytes: &[u8]) -> Result<CbrnStructuredClaim, String
 pub fn canonicalize_cbrn_claim(claim: &CbrnStructuredClaim) -> Result<Vec<u8>, String> {
     validate_cbrn_claim(claim)?;
 
-    let mut out = Vec::new();
-    out.push(claim.schema_version.discriminant());
-    out.push(claim.profile.discriminant());
-    out.push(claim.domain.discriminant());
-    out.push(claim.claim_kind.discriminant());
-
-    out.push(claim.quantities.len() as u8);
+    let mut out = vec![
+        claim.schema_version.discriminant(),
+        claim.profile.discriminant(),
+        claim.domain.discriminant(),
+        claim.claim_kind.discriminant(),
+        claim.quantities.len() as u8,
+    ];
     for quantity in &claim.quantities {
         out.push(quantity.quantity_kind.discriminant());
         out.extend_from_slice(&quantity.value_q.to_be_bytes());
