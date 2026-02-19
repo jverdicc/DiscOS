@@ -20,15 +20,16 @@ jobs:
       - name: Verify EvidenceOS proto sync
         run: ./scripts/check_evidenceos_proto_sync.sh
 
-      - name: Rustfmt
-        run: cargo fmt --all -- --check
+      - name: Run format, clippy, tests, coverage evidence script
+        run: ./scripts/test_evidence.sh
 
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      - name: Tests
-        run: cargo test --workspace --all-targets
-
+      - name: Upload CI artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discos-ci-artifacts
+          path: artifacts/ci/
+          if-no-files-found: warn
 
   system:
     runs-on: ubuntu-latest

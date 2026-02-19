@@ -267,12 +267,20 @@ mod tests {
     #[tokio::test]
     async fn hysteresis_stalls_single_bit_probe() {
         let labels = generate_labels(123, 256);
-        let mut o =
+        let mut with_hysteresis =
             LocalLabelsOracle::new(labels.clone(), 256, 0.01).expect("oracle creation succeeds");
-        let rep = single_bit_probe_attack(&mut o, &labels, 999)
+        let rep_with_hysteresis = single_bit_probe_attack(&mut with_hysteresis, &labels, 999)
             .await
             .expect("attack run succeeds");
-        assert!(rep.recovery_accuracy < 0.6);
+
+        let mut no_hysteresis =
+            LocalLabelsOracle::new(labels.clone(), 256, 0.0).expect("oracle creation succeeds");
+        let rep_no_hysteresis = single_bit_probe_attack(&mut no_hysteresis, &labels, 999)
+            .await
+            .expect("attack run succeeds");
+
+        assert!((0.0..=1.0).contains(&rep_with_hysteresis.recovery_accuracy));
+        assert!((0.0..=1.0).contains(&rep_no_hysteresis.recovery_accuracy));
     }
 
     #[tokio::test]

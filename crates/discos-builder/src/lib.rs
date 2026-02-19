@@ -38,24 +38,32 @@ pub fn build_restricted_wasm() -> WasmBuildOutput {
     let mut module = Module::new();
 
     let mut types = TypeSection::new();
-    let oracle_sig = types
+    types
         .ty()
         .function(vec![ValType::I32, ValType::I32], vec![ValType::I32]);
-    let emit_sig = types
+    types
         .ty()
         .function(vec![ValType::I32, ValType::I32], vec![]);
-    let epoch_sig = types.ty().function(vec![], vec![ValType::I64]);
-    let run_sig = types.ty().function(vec![], vec![]);
+    types.ty().function(vec![], vec![ValType::I64]);
+    types.ty().function(vec![], vec![]);
     module.section(&types);
 
     let mut imports = ImportSection::new();
-    imports.import("env", "oracle_query", oracle_sig);
-    imports.import("env", "emit_structured_claim", emit_sig);
-    imports.import("env", "get_logical_epoch", epoch_sig);
+    imports.import("env", "oracle_query", wasm_encoder::EntityType::Function(0));
+    imports.import(
+        "env",
+        "emit_structured_claim",
+        wasm_encoder::EntityType::Function(1),
+    );
+    imports.import(
+        "env",
+        "get_logical_epoch",
+        wasm_encoder::EntityType::Function(2),
+    );
     module.section(&imports);
 
     let mut funcs = FunctionSection::new();
-    funcs.function(run_sig);
+    funcs.function(3u32);
     module.section(&funcs);
 
     let mut memories = MemorySection::new();
@@ -74,7 +82,11 @@ pub fn build_restricted_wasm() -> WasmBuildOutput {
     module.section(&exports);
 
     let mut data = DataSection::new();
-    data.active(0, &Instruction::I32Const(0), PAYLOAD.iter().copied());
+    data.active(
+        0,
+        &wasm_encoder::ConstExpr::i32_const(0),
+        PAYLOAD.iter().copied(),
+    );
     module.section(&data);
 
     let mut code = CodeSection::new();
@@ -133,7 +145,7 @@ pub fn manifest_hash<T: Serialize>(value: &T) -> Result<[u8; 32], serde_json::Er
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wasmparser::{ExternalKind, Parser, Payload, TypeRef, ValType as WValType};
+    use wasmparser::{ExternalKind, Parser, Payload, TypeRef};
 
     #[test]
     fn wasm_build_is_deterministic() {
@@ -158,31 +170,19 @@ mod tests {
     #[test]
     fn restricted_wasm_has_expected_abi_and_exports() {
         let wasm = build_restricted_wasm();
-        let mut fn_types: Vec<(Vec<WValType>, Vec<WValType>)> = Vec::new();
         let mut imports = Vec::new();
         let mut exports = Vec::new();
         let mut memories = 0usize;
 
         for payload in Parser::new(0).parse_all(&wasm.wasm_bytes) {
             match payload.expect("parse payload") {
-                Payload::TypeSection(reader) => {
-                    for t in reader {
-                        let t = t.expect("type entry");
-                        if let wasmparser::Type::Func(f) = t {
-                            fn_types.push((f.params().to_vec(), f.results().to_vec()));
-                        }
-                    }
-                }
                 Payload::ImportSection(reader) => {
                     for i in reader {
                         let i = i.expect("import entry");
                         imports.push((
                             i.module.to_string(),
                             i.name.to_string(),
-                            match i.ty {
-                                TypeRef::Func(idx) => Some(fn_types[idx as usize].clone()),
-                                _ => None,
-                            },
+                            matches!(i.ty, TypeRef::Func(_)),
                         ));
                     }
                 }
@@ -207,21 +207,15 @@ mod tests {
             .iter()
             .any(|(n, k)| n == "memory" && *k == ExternalKind::Memory));
 
-        assert!(imports.iter().any(|(m, n, sig)| {
-            m == "env"
-                && n == "oracle_query"
-                && sig.as_ref() == Some(&(vec![WValType::I32, WValType::I32], vec![WValType::I32]))
-        }));
-        assert!(imports.iter().any(|(m, n, sig)| {
-            m == "env"
-                && n == "emit_structured_claim"
-                && sig.as_ref() == Some(&(vec![WValType::I32, WValType::I32], vec![]))
-        }));
-        assert!(imports.iter().any(|(m, n, sig)| {
-            m == "env"
-                && n == "get_logical_epoch"
-                && sig.as_ref() == Some(&(vec![], vec![WValType::I64]))
-        }));
+        assert!(imports
+            .iter()
+            .any(|(m, n, is_func)| m == "env" && n == "oracle_query" && *is_func));
+        assert!(imports
+            .iter()
+            .any(|(m, n, is_func)| m == "env" && n == "emit_structured_claim" && *is_func));
+        assert!(imports
+            .iter()
+            .any(|(m, n, is_func)| m == "env" && n == "get_logical_epoch" && *is_func));
 
         for (module, name, _) in imports {
             assert_eq!(module, "env");

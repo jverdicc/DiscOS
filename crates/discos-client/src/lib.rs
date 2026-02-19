@@ -284,7 +284,7 @@ pub fn canonical_output_matches_capsule(
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct SignedTreeHead {
     pub tree_size: u64,
     pub root_hash: [u8; 32],
@@ -306,7 +306,7 @@ pub struct ConsistencyProof {
     pub path: Vec<[u8; 32]>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct SignedRevocation {
     pub claim_id: Vec<u8>,
     pub reason_code: String,
@@ -750,7 +750,7 @@ mod tests {
 
         let leaves4 = [b"a", b"b", b"c", b"d"]
             .iter()
-            .map(|x| merkle_leaf_hash(x))
+            .map(|x| merkle_leaf_hash(*x))
             .collect::<Vec<_>>();
         let left = merkle_node_hash(leaves4[0], leaves4[1]);
         let right = merkle_node_hash(leaves4[2], leaves4[3]);

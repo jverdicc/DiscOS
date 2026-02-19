@@ -24,7 +24,9 @@ fn hex32(v: &str) -> [u8; 32] {
 
 #[test]
 fn topicid_golden_vectors_match() {
-    let raw = std::fs::read_to_string("test_vectors/topicid_vectors.json").expect("read vectors");
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("test_vectors/topicid_vectors.json");
+    let raw = std::fs::read_to_string(path).expect("read vectors");
     let vectors: Vec<Vector> = serde_json::from_str(&raw).expect("parse vectors");
     for v in vectors {
         let computed = compute_topic_id(

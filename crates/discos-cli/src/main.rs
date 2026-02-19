@@ -5,7 +5,7 @@
 
 use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use clap::{Parser, Subcommand};
 use discos_builder::{
     build_restricted_wasm, manifest_hash, sha256, AlphaHIRManifest, CausalDSLManifest,
@@ -135,7 +135,7 @@ fn hex_decode_32(s: &str) -> anyhow::Result<[u8; 32]> {
 
 fn hex_decode_bytes(s: &str) -> anyhow::Result<Vec<u8>> {
     let s = s.trim();
-    anyhow::ensure!(s.len() % 2 == 0, "hex length must be even");
+    anyhow::ensure!(s.len().is_multiple_of(2), "hex length must be even");
     let mut out = Vec::with_capacity(s.len() / 2);
     for i in (0..s.len()).step_by(2) {
         out.push(u8::from_str_radix(&s[i..i + 2], 16).context("invalid hex")?);
@@ -174,7 +174,7 @@ fn load_sth_cache(path: &Path) -> anyhow::Result<SthCache> {
         return Ok(SthCache::default());
     }
     let bytes = fs::read(path).with_context(|| format!("read cache {}", path.display()))?;
-    Ok(serde_json::from_slice(&bytes).context("parse sth cache json")?)
+    serde_json::from_slice(&bytes).context("parse sth cache json")
 }
 
 fn persist_sth_cache(path: &Path, cache: &SthCache) -> anyhow::Result<()> {
@@ -298,10 +298,12 @@ async fn main() -> anyhow::Result<()> {
                     decision: Decision::Pass,
                     reason_codes: vec![ReasonCode::SensorAgreement],
                 };
-                validate_cbrn_claim(&c).context("constructed CBRN claim should validate")?;
+                validate_cbrn_claim(&c)
+                    .map_err(|e| anyhow!("constructed CBRN claim should validate: {e}"))?;
                 fs::write(
                     dir.join("structured_claim.json"),
-                    canonicalize_cbrn_claim(&c)?,
+                    canonicalize_cbrn_claim(&c)
+                        .map_err(|e| anyhow!("failed to canonicalize cbrn claim: {e}"))?,
                 )?;
 
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
@@ -417,19 +419,22 @@ async fn main() -> anyhow::Result<()> {
                         .etl_root_hash
                         .clone()
                         .try_into()
-                        .context("etl root hash must be 32 bytes")?;
+                        .map_err(|_| anyhow!("etl root hash must be 32 bytes"))?;
                     let inclusion = resp.inclusion.context("missing inclusion proof")?;
                     let inclusion = InclusionProof {
                         leaf_hash: inclusion
                             .leaf_hash
                             .try_into()
-                            .context("leaf hash must be 32 bytes")?,
+                            .map_err(|_| anyhow!("leaf hash must be 32 bytes"))?,
                         leaf_index: inclusion.leaf_index,
                         tree_size: inclusion.tree_size,
                         audit_path: inclusion
                             .audit_path
                             .into_iter()
-                            .map(|n| n.try_into().context("audit path node must be 32 bytes"))
+                            .map(|n| {
+                                n.try_into()
+                                    .map_err(|_| anyhow!("audit path node must be 32 bytes"))
+                            })
                             .collect::<anyhow::Result<Vec<[u8; 32]>>>()?,
                     };
                     let consistency = resp.consistency.context("missing consistency proof")?;
@@ -439,7 +444,10 @@ async fn main() -> anyhow::Result<()> {
                         path: consistency
                             .path
                             .into_iter()
-                            .map(|n| n.try_into().context("consistency node must be 32 bytes"))
+                            .map(|n| {
+                                n.try_into()
+                                    .map_err(|_| anyhow!("consistency node must be 32 bytes"))
+                            })
                             .collect::<anyhow::Result<Vec<[u8; 32]>>>()?,
                     };
                     let inclusion_ok = verify_inclusion(root, &inclusion);
@@ -471,7 +479,7 @@ async fn main() -> anyhow::Result<()> {
                                 .sth_signature
                                 .clone()
                                 .try_into()
-                                .context("sth signature must be 64 bytes")?,
+                                .map_err(|_| anyhow!("sth signature must be 64 bytes"))?,
                         };
                         verify_sth_signature(&sth, &pubkey)?;
                     }

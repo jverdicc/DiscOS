@@ -236,8 +236,9 @@ pub async fn attacker_ternary_evidenceos(
         if a1.is_none() || a2.is_none() {
             break;
         }
-        let a1 = a1.unwrap();
-        let a2 = a2.unwrap();
+        let (Some(a1), Some(a2)) = (a1, a2) else {
+            break;
+        };
 
         if a1 < a2 {
             lo = x1;

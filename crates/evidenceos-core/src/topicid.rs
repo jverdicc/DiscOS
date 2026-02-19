@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-const TOPIC_DOMAIN: &[u8] = b"evidenceos/topic-id/v4";
+const TOPIC_DOMAIN: &[u8] = b"evidenceos/topicid/v1";
 const SEMANTIC_PHYS_HIR_ESCALATION_DISTANCE: u32 = 128;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -99,5 +99,58 @@ pub fn compute_topic_id(metadata: &ClaimMetadata, signals: TopicSignals) -> Topi
         signals,
         escalate_to_heavy: escalation_reason.is_some(),
         escalation_reason,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn topic_id_golden_vectors_match_evidenceos_v5() {
+        let metadata = ClaimMetadata {
+            lane: "high_assurance".to_string(),
+            alpha_micros: 50_000,
+            epoch_config_ref: "epoch/default".to_string(),
+            output_schema_id: "schema/v1".to_string(),
+        };
+
+        let case1 = compute_topic_id(
+            &metadata,
+            TopicSignals {
+                semantic_hash: Some([7u8; 32]),
+                phys_hir_signature_hash: [7u8; 32],
+                dependency_merkle_root: None,
+            },
+        );
+        assert_eq!(
+            case1.topic_id_hex,
+            "64a97ddb6625437a9f95b855d49d7838720e11725c9471a26e29f1fb8dba7539"
+        );
+
+        let case2 = compute_topic_id(
+            &metadata,
+            TopicSignals {
+                semantic_hash: Some([1u8; 32]),
+                phys_hir_signature_hash: [2u8; 32],
+                dependency_merkle_root: Some([3u8; 32]),
+            },
+        );
+        assert_eq!(
+            case2.topic_id_hex,
+            "939bdca9f8e380f5f74a9af688db90e4de82661465a8e3014f033061a1f6eab3"
+        );
+    }
+
+    #[test]
+    fn sha256_known_answer_tests() {
+        assert_eq!(
+            hex_encode(&sha256(b"")),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            hex_encode(&sha256(b"abc")),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
     }
 }

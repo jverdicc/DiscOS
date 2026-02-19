@@ -1,7 +1,7 @@
 #[cfg(feature = "sim")]
 use discos_core::{
     boundary::{accuracy_value_det, generate_boundary},
-    labels::LocalLabelsOracle,
+    labels::{AccuracyOracle, LocalLabelsOracle},
 };
 use discos_core::{
     structured_claims::{
@@ -28,7 +28,6 @@ proptest! {
             alpha_micros: alpha,
             epoch_config_ref: epoch,
             output_schema_id: schema,
-            epoch_size: 0,
         };
         let s = TopicSignals { semantic_hash: semantic, phys_hir_signature_hash: phys, dependency_merkle_root: dep };
         let a = compute_topic_id(&m, s.clone());
@@ -80,7 +79,8 @@ proptest! {
 
         let labels = vec![0u8,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1];
         let mut oracle = LocalLabelsOracle::new(labels, num_buckets, delta_sigma).expect("labels oracle");
-        let obs = oracle.query_sync(&[0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1]).expect("query");
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("rt");
+        let obs = runtime.block_on(oracle.query_accuracy(&[0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1])).expect("query");
         prop_assert!(obs.bucket < num_buckets);
     }
 }

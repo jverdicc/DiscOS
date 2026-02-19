@@ -103,41 +103,45 @@ impl TopicBudgetLedger {
 mod tests {
     use super::*;
 
-    fn sample() -> (ClaimMetadata, TopicSignals) {
-        (
-            ClaimMetadata {
-                lane: "cbrn".into(),
-                alpha_micros: 50_000,
-                epoch_config_ref: "epoch/v1".into(),
-                output_schema_id: "cbrn-sc.v1".into(),
-            },
+    fn metadata() -> ClaimMetadata {
+        ClaimMetadata {
+            lane: "high_assurance".into(),
+            alpha_micros: 50_000,
+            epoch_config_ref: "epoch/default".into(),
+            output_schema_id: "schema/v1".into(),
+        }
+    }
+
+    #[test]
+    fn topic_id_golden_vector_case_1() {
+        let result = compute_topic_id(
+            &metadata(),
             TopicSignals {
-                semantic_hash: None,
+                semantic_hash: Some([7u8; 32]),
                 phys_hir_signature_hash: [7u8; 32],
                 dependency_merkle_root: None,
             },
-        )
+        );
+        assert_eq!(
+            result.topic_id_hex,
+            "64a97ddb6625437a9f95b855d49d7838720e11725c9471a26e29f1fb8dba7539"
+        );
     }
 
     #[test]
-    fn discos_matches_evidenceos_topic_id_bytes() {
-        let (metadata, signals) = sample();
-        let discos = compute_topic_id(&metadata, signals.clone());
-        let evidence = evidenceos_core::topicid::compute_topic_id(&metadata, signals);
-        assert_eq!(discos.topic_id, evidence.topic_id);
-    }
-
-    #[test]
-    fn discos_matches_evidenceos_escalation_flag() {
-        let (metadata, mut signals) = sample();
-        signals.semantic_hash = Some([0u8; 32]);
-        signals.phys_hir_signature_hash = [0xffu8; 32];
-
-        let discos = compute_topic_id(&metadata, signals.clone());
-        let evidence = evidenceos_core::topicid::compute_topic_id(&metadata, signals);
-
-        assert_eq!(discos.escalate_to_heavy, evidence.escalate_to_heavy);
-        assert_eq!(discos.escalation_reason, evidence.escalation_reason);
+    fn topic_id_golden_vector_case_2() {
+        let result = compute_topic_id(
+            &metadata(),
+            TopicSignals {
+                semantic_hash: Some([1u8; 32]),
+                phys_hir_signature_hash: [2u8; 32],
+                dependency_merkle_root: Some([3u8; 32]),
+            },
+        );
+        assert_eq!(
+            result.topic_id_hex,
+            "939bdca9f8e380f5f74a9af688db90e4de82661465a8e3014f033061a1f6eab3"
+        );
     }
 
     #[test]
@@ -145,8 +149,8 @@ mod tests {
         let mut ledger = TopicBudgetLedger::new(10.0);
         let a = [1u8; 32];
         let b = [2u8; 32];
-        let rem_a = ledger.charge(a, 3.0).expect("charge topic a");
-        let rem_b = ledger.charge(b, 4.0).expect("charge topic b");
+        let rem_a = ledger.charge(a, 3.0).unwrap_or(-1.0);
+        let rem_b = ledger.charge(b, 4.0).unwrap_or(-1.0);
         assert_eq!(rem_a, 7.0);
         assert_eq!(rem_b, 6.0);
         assert_eq!(ledger.topic_count(), 2);
