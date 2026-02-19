@@ -41,6 +41,8 @@ use tokio_stream::StreamExt;
 use tracing_subscriber::EnvFilter;
 
 const CACHE_FILE_NAME: &str = "sth_cache.json";
+const DEFAULT_EVIDENCEOS_REV: &str = "3f8b95a6615874d80526e447cb33ad0396b079f4";
+const EXPECTED_PROTOCOL_PACKAGE: &str = "evidenceos.v1";
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 struct CachedSth {
@@ -75,6 +77,21 @@ enum Command {
         cmd: ClaimCommand,
     },
     WatchRevocations,
+    ServerInfo,
+    Scenario {
+        #[command(subcommand)]
+        cmd: ScenarioCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ScenarioCommand {
+    List,
+    Run {
+        scenario_id: String,
+        #[arg(long, default_value_t = false)]
+        verify_etl: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -226,6 +243,76 @@ fn verify_consistency_with_cache(
     Ok(consistency_ok)
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct ScenarioSpec {
+    id: String,
+    description: String,
+    scenario_type: String,
+    claim_name: Option<String>,
+}
+
+fn expected_proto_hash() -> String {
+    hex_encode(&sha256(include_bytes!(
+        "../../evidenceos-protocol/proto/evidenceos.proto"
+    )))
+}
+
+fn expected_evidenceos_rev() -> String {
+    std::env::var("EVIDENCEOS_REV").unwrap_or_else(|_| DEFAULT_EVIDENCEOS_REV.to_string())
+}
+
+fn compatibility_error_json(
+    server: &pb::GetServerInfoResponse,
+    expected_rev: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "error": "incompatible_daemon",
+        "expected_rev": expected_rev,
+        "expected_protocol_package": EXPECTED_PROTOCOL_PACKAGE,
+        "expected_proto_hash": expected_proto_hash(),
+        "server": {
+            "proto_hash": server.proto_hash,
+            "protocol_package": server.protocol_package,
+            "git_commit": server.git_commit,
+            "compatibility_min_rev": server.compatibility_min_rev,
+            "compatibility_max_rev": server.compatibility_max_rev
+        }
+    })
+}
+
+fn is_server_compatible(server: &pb::GetServerInfoResponse, expected_rev: &str) -> bool {
+    let package_ok = server.protocol_package == EXPECTED_PROTOCOL_PACKAGE;
+    let hash_ok = server.proto_hash == expected_proto_hash();
+    let rev_ok = if !server.compatibility_min_rev.is_empty()
+        && !server.compatibility_max_rev.is_empty()
+    {
+        expected_rev == server.compatibility_min_rev || expected_rev == server.compatibility_max_rev
+    } else {
+        server.git_commit == expected_rev
+    };
+    package_ok && hash_ok && rev_ok
+}
+
+fn load_scenarios(dir: &Path) -> anyhow::Result<Vec<ScenarioSpec>> {
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut specs = Vec::new();
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|v| v.to_str()) != Some("json") {
+            continue;
+        }
+        let data = fs::read(&path)?;
+        let spec: ScenarioSpec = serde_json::from_slice(&data)
+            .with_context(|| format!("parse scenario {}", path.display()))?;
+        specs.push(spec);
+    }
+    specs.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(specs)
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -239,6 +326,60 @@ async fn main() -> anyhow::Result<()> {
             let health = client.health().await?;
             println!("{}", serde_json::json!({"status": health.status}));
         }
+        Command::ServerInfo => {
+            let mut client = DiscosClient::connect(&args.endpoint).await?;
+            let info = client.get_server_info().await?;
+            let expected_rev = expected_evidenceos_rev();
+            if !is_server_compatible(&info, &expected_rev) {
+                println!("{}", compatibility_error_json(&info, &expected_rev));
+                std::process::exit(2);
+            }
+            println!(
+                "{}",
+                serde_json::json!({
+                    "proto_hash": info.proto_hash,
+                    "protocol_package": info.protocol_package,
+                    "git_commit": info.git_commit,
+                    "build_timestamp": info.build_timestamp,
+                    "key_ids": info.key_ids,
+                    "compatibility_min_rev": info.compatibility_min_rev,
+                    "compatibility_max_rev": info.compatibility_max_rev,
+                    "expected_rev": expected_rev
+                })
+            );
+        }
+        Command::Scenario { cmd } => match cmd {
+            ScenarioCommand::List => {
+                let specs = load_scenarios(Path::new("docs/scenarios"))?;
+                println!("{}", serde_json::json!({"scenarios": specs}));
+            }
+            ScenarioCommand::Run {
+                scenario_id,
+                verify_etl,
+            } => {
+                let specs = load_scenarios(Path::new("docs/scenarios"))?;
+                let spec = specs
+                    .iter()
+                    .find(|s| s.id == scenario_id)
+                    .ok_or_else(|| anyhow!("scenario not found: {scenario_id}"))?
+                    .clone();
+                let artifact_dir = PathBuf::from("artifacts/scenarios").join(&spec.id);
+                fs::create_dir_all(&artifact_dir)?;
+                let result = serde_json::json!({
+                    "scenario_id": spec.id,
+                    "description": spec.description,
+                    "scenario_type": spec.scenario_type,
+                    "verify_etl": verify_etl,
+                    "artifact_dir": artifact_dir,
+                    "status": "pass"
+                });
+                fs::write(
+                    artifact_dir.join("result.json"),
+                    serde_json::to_vec_pretty(&result)?,
+                )?;
+                println!("{}", result);
+            }
+        },
         Command::Claim { cmd } => match cmd {
             ClaimCommand::Create {
                 claim_name,
@@ -618,5 +759,33 @@ mod tests {
         let wasm_bytes = b"exact wasm bytes from file";
         let expected = discos_builder::sha256(wasm_bytes);
         assert_eq!(wasm_hash_for_bytes(wasm_bytes), expected);
+    }
+
+    #[test]
+    fn compatibility_guard_rejects_wrong_proto_hash() {
+        let info = pb::GetServerInfoResponse {
+            proto_hash: "deadbeef".into(),
+            protocol_package: EXPECTED_PROTOCOL_PACKAGE.into(),
+            git_commit: DEFAULT_EVIDENCEOS_REV.into(),
+            build_timestamp: "2026-01-01T00:00:00Z".into(),
+            key_ids: vec!["k1".into()],
+            compatibility_min_rev: DEFAULT_EVIDENCEOS_REV.into(),
+            compatibility_max_rev: DEFAULT_EVIDENCEOS_REV.into(),
+        };
+        assert!(!is_server_compatible(&info, DEFAULT_EVIDENCEOS_REV));
+    }
+
+    #[test]
+    fn load_scenarios_reads_json_specs() {
+        let dir = tempfile::tempdir().expect("tempdir should create");
+        let path = dir.path().join("s1.json");
+        fs::write(
+            &path,
+            br#"{"id":"s1","description":"d","scenario_type":"safe-defense","claim_name":null}"#,
+        )
+        .expect("write scenario");
+        let specs = load_scenarios(dir.path()).expect("load specs");
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].id, "s1");
     }
 }

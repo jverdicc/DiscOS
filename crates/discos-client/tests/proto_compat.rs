@@ -36,6 +36,7 @@ fn generated_client_exposes_expected_service_methods() {
         std::mem::drop(client.get_consistency_proof(pb::GetConsistencyProofRequest::default()));
         std::mem::drop(client.revoke_claim(pb::RevokeClaimRequest::default()));
         std::mem::drop(client.watch_revocations(pb::WatchRevocationsRequest::default()));
+        std::mem::drop(client.get_server_info(pb::GetServerInfoRequest::default()));
     }
 
     let _ = _assert_methods;
@@ -65,6 +66,7 @@ fn descriptor_contains_required_v2_rpcs() {
         "evidenceos.v1.EvidenceOS.FetchCapsule",
         "evidenceos.v1.EvidenceOS.GetSignedTreeHead",
         "evidenceos.v1.EvidenceOS.WatchRevocations",
+        "evidenceos.v1.EvidenceOS.GetServerInfo",
     ];
 
     for rpc in required {

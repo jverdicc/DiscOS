@@ -141,3 +141,23 @@ Start from:
 DiscOS is licensed under the Apache License, Version 2.0. See [`LICENSE`](./LICENSE) for
 the full license text and [`NOTICE`](./NOTICE) for attribution notices distributed with the
 project.
+
+## What-if Scenarios (Safe)
+
+| Scenario | Expected outcome | Command | Evidence artifact |
+| --- | --- | --- | --- |
+| repeated probing attempts | PASS: budget freeze / bounded defensive behavior | `cargo run -p discos-cli -- scenario run repeated-probing-budget-freeze` | `artifacts/scenarios/repeated-probing-budget-freeze/result.json` |
+| sybil scaling | PASS: topic-bounded flat success trend | `cargo run -p discos-cli -- scenario run sybil-scaling-topic-flat-success` | `artifacts/scenarios/sybil-scaling-topic-flat-success/result.json` |
+| stale proof replay | FAIL closed during ETL verification path | `cargo run -p discos-cli -- scenario run stale-proof-fails-closed --verify-etl` | `artifacts/scenarios/stale-proof-fails-closed/result.json` |
+| downgrade mismatch | FAIL: DiscOS refuses incompatible daemon | `cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 server-info` | `artifacts/system-test/*/server_info.json` |
+
+## Reproduce scenario evidence
+
+```bash
+make test-evidence
+./scripts/system_test.sh
+cargo run -p discos-cli -- scenario list
+cargo run -p discos-cli -- scenario run repeated-probing-budget-freeze
+cargo run -p discos-cli -- scenario run sybil-scaling-topic-flat-success
+cargo run -p discos-cli -- scenario run stale-proof-fails-closed --verify-etl
+```

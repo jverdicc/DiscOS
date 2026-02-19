@@ -1,0 +1,6 @@
+{
+  "id": "downgrade-mismatch-refused",
+  "description": "DiscOS compatibility guard refuses incompatible daemon protocol revisions.",
+  "scenario_type": "compatibility",
+  "claim_name": null
+}

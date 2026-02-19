@@ -199,6 +199,21 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
     ) -> Result<Response<pb::RevokeClaimResponse>, Status> {
         Ok(Response::new(pb::RevokeClaimResponse { revoked: true }))
     }
+    async fn get_server_info(
+        &self,
+        _: Request<pb::GetServerInfoRequest>,
+    ) -> Result<Response<pb::GetServerInfoResponse>, Status> {
+        Ok(Response::new(pb::GetServerInfoResponse {
+            proto_hash: "test-proto-hash".into(),
+            protocol_package: "evidenceos.v1".into(),
+            git_commit: "3f8b95a6615874d80526e447cb33ad0396b079f4".into(),
+            build_timestamp: "2026-01-01T00:00:00Z".into(),
+            key_ids: vec!["k1".into()],
+            compatibility_min_rev: "3f8b95a6615874d80526e447cb33ad0396b079f4".into(),
+            compatibility_max_rev: "3f8b95a6615874d80526e447cb33ad0396b079f4".into(),
+        }))
+    }
+
     type WatchRevocationsStream = tokio_stream::Empty<Result<pb::RevocationEvent, Status>>;
     async fn watch_revocations(
         &self,

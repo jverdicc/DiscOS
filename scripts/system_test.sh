@@ -51,6 +51,19 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 
+run_json "${OUT_DIR}/server_info.json" \
+  cargo run --quiet -p discos-cli -- --endpoint "${ADDR}" server-info
+
+python - <<'PYINFO' "${OUT_DIR}/server_info.json" "${REV}"
+import json, pathlib, sys
+info = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))
+expected_rev = sys.argv[2]
+assert info.get('expected_rev') == expected_rev, 'server-info expected_rev mismatch'
+assert info.get('protocol_package') == 'evidenceos.v1', 'unexpected package name'
+assert isinstance(info.get('key_ids'), list), 'key_ids should be a list'
+print('server-info compatibility assertions passed')
+PYINFO
+
 run_json "${OUT_DIR}/validate_pass.json" \
   cargo run --quiet -p discos-cli -- claim validate-structured \
   --input test_vectors/structured_claims/valid/pass_max_boundaries.json

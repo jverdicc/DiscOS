@@ -18,6 +18,7 @@ service EvidenceOS {
   rpc GetConsistencyProof(GetConsistencyProofRequest) returns (GetConsistencyProofResponse);
   rpc RevokeClaim(RevokeClaimRequest) returns (RevokeClaimResponse);
   rpc WatchRevocations(WatchRevocationsRequest) returns (stream RevocationEvent);
+  rpc GetServerInfo(GetServerInfoRequest) returns (GetServerInfoResponse);
 }
 
 message HealthRequest {}
@@ -168,4 +169,15 @@ message RevocationEvent {
   bytes claim_id = 1;
   string reason_code = 2;
   uint64 logical_epoch = 3;
+}
+
+message GetServerInfoRequest {}
+message GetServerInfoResponse {
+  string proto_hash = 1;
+  string protocol_package = 2;
+  string git_commit = 3;
+  string build_timestamp = 4;
+  repeated string key_ids = 5;
+  string compatibility_min_rev = 6;
+  string compatibility_max_rev = 7;
 }
