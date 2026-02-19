@@ -11,16 +11,19 @@
 Run the full gate script:
 
 ```bash
-./scripts/test_evidence.sh
+make test-evidence
 ```
 
 This script writes the following deterministic artifact filenames under `artifacts/ci/`:
 
 - `discos_fmt_output.txt`
-- `discos_clippy_output.txt`
-- `discos_test_output.txt`
+- `clippy-report.txt`
+- `test_output.txt`
 - `discos_coverage_output.txt`
-- `lcov.info` (when `cargo-llvm-cov` is available)
+- `coverage.lcov`
+- `fuzz_structured_claims_json.txt`
+- `fuzz_structured_claims_canonical.txt`
+- `fuzz_structured_claim_parse_canonicalize.txt`
 
 Exact gate commands run by the script:
 
@@ -28,7 +31,10 @@ Exact gate commands run by the script:
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
-cargo llvm-cov --workspace --all-features --lcov --output-path artifacts/ci/lcov.info --fail-under-lines 90
+cargo llvm-cov --workspace --all-features --lcov --output-path artifacts/ci/coverage.lcov --fail-under-lines 95
+cargo +nightly fuzz run fuzz_structured_claims_json -- -max_total_time=20
+cargo +nightly fuzz run fuzz_structured_claims_canonical -- -max_total_time=20
+cargo +nightly fuzz run fuzz_structured_claim_parse_canonicalize -- -max_total_time=10
 ```
 
 ## Protocol sync evidence
@@ -67,6 +73,14 @@ Expected files include:
 - `daemon.log`
 - `daemon_contract_test.log`
 - `summary.txt`
+
+To run end-to-end against a specific EvidenceOS daemon binary:
+
+```bash
+EVIDENCEOS_DAEMON_BIN=/path/to/evidenceos-daemon \
+EVIDENCEOS_DAEMON_ADDR=http://127.0.0.1:50051 \
+./scripts/system_test.sh
+```
 
 ## CI artifact upload locations
 

@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EVIDENCEOS_REV: 3f8b95a6615874d80526e447cb33ad0396b079f4
+      EVIDENCEOS_REPO: https://github.com/EvidenceOS/evidenceos.git
     steps:
       - uses: actions/checkout@v4
 
@@ -16,6 +17,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+
+      - name: Install nightly toolchain (for fuzz)
+        uses: dtolnay/rust-toolchain@nightly
 
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
@@ -37,12 +41,13 @@ jobs:
         with:
           name: discos-ci-artifacts
           path: artifacts/ci/
-          if-no-files-found: warn
+          if-no-files-found: error
 
   system:
     runs-on: ubuntu-latest
     env:
       EVIDENCEOS_REV: 3f8b95a6615874d80526e447cb33ad0396b079f4
+      EVIDENCEOS_REPO: https://github.com/EvidenceOS/evidenceos.git
     steps:
       - uses: actions/checkout@v4
 
@@ -54,7 +59,7 @@ jobs:
 
       - name: Checkout pinned EvidenceOS
         run: |
-          git clone https://github.com/jverdicc/EvidenceOS.git ../EvidenceOS
+          git clone "$EVIDENCEOS_REPO" ../EvidenceOS
           cd ../EvidenceOS
           git checkout "$EVIDENCEOS_REV"
 

@@ -354,9 +354,13 @@ name = "discos-builder"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "discos-client",
+ "hex",
+ "proptest",
  "serde",
  "serde_json",
  "sha2",
+ "tokio",
  "wasm-encoder 0.220.1",
  "wasmparser 0.220.1",
  "wat",

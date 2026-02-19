@@ -179,7 +179,10 @@ mod tests {
             CANONICAL_OUTPUT_SCHEMA_ID
         );
         for alias in OUTPUT_SCHEMA_ID_ALIASES {
-            assert_eq!(canonicalize_output_schema_id(alias), CANONICAL_OUTPUT_SCHEMA_ID);
+            assert_eq!(
+                canonicalize_output_schema_id(alias),
+                CANONICAL_OUTPUT_SCHEMA_ID
+            );
         }
     }
 

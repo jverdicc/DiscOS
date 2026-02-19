@@ -288,7 +288,7 @@ async fn main() -> anyhow::Result<()> {
                         lane: lane.clone(),
                         alpha_micros,
                         epoch_config_ref: epoch_config_ref.clone(),
-                        output_schema_id,
+                        output_schema_id: output_schema_id.clone(),
                     },
                     TopicSignals {
                         semantic_hash: None,
