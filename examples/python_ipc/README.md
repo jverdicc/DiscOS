@@ -12,7 +12,7 @@ This folder demonstrates interoperability with the **Rust EvidenceOS kernel** vi
 
 ```bash
 # In the EvidenceOS repo:
-cargo run -p evidenceos-daemon -- --listen 127.0.0.1:50051 --etl-path ./data/etl.log
+cargo run -p evidenceos-daemon -- --listen 127.0.0.1:50051 --data-dir ./data
 ```
 
 ## Setup
