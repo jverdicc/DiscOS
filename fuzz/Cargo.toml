@@ -1,0 +1,30 @@
+[package]
+name = "discos-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+discos-core = { path = "../crates/discos-core" }
+
+[[bin]]
+name = "fuzz_structured_claims_json"
+path = "fuzz_targets/fuzz_structured_claims_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_structured_claims_canonical"
+path = "fuzz_targets/fuzz_structured_claims_canonical.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

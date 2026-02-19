@@ -14,9 +14,9 @@
 
 use serde::{Deserialize, Serialize};
 
-const MAX_REASON_CODES: usize = 8;
-const MAX_REFERENCES: usize = 16;
-const MAX_QUANTITIES: usize = 8;
+pub const MAX_REASON_CODES: usize = 8;
+pub const MAX_REFERENCES: usize = 16;
+pub const MAX_QUANTITIES: usize = 8;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -542,14 +542,14 @@ mod tests {
 
     #[test]
     fn validate_rejects_empty_quantities() {
-        let mut c = sample();
+        let mut c = extra_sample();
         c.quantities.clear();
         assert!(validate_cbrn_claim(&c).is_err());
     }
 
     #[test]
     fn validate_rejects_too_many_quantities() {
-        let mut c = sample();
+        let mut c = extra_sample();
         c.quantities = (0..(MAX_QUANTITIES + 1))
             .map(|_| QuantizedValue {
                 quantity_kind: QuantityKind::Concentration,
@@ -563,35 +563,35 @@ mod tests {
 
     #[test]
     fn validate_rejects_negative_value_q() {
-        let mut c = sample();
+        let mut c = extra_sample();
         c.quantities[0].value_q = -1;
         assert!(validate_cbrn_claim(&c).is_err());
     }
 
     #[test]
     fn validate_rejects_too_many_references() {
-        let mut c = sample();
+        let mut c = extra_sample();
         c.references = vec![[9u8; 32]; MAX_REFERENCES + 1];
         assert!(validate_cbrn_claim(&c).is_err());
     }
 
     #[test]
     fn validate_rejects_empty_reason_codes() {
-        let mut c = sample();
+        let mut c = extra_sample();
         c.reason_codes.clear();
         assert!(validate_cbrn_claim(&c).is_err());
     }
 
     #[test]
     fn validate_rejects_too_many_reason_codes() {
-        let mut c = sample();
+        let mut c = extra_sample();
         c.reason_codes = vec![ReasonCode::SensorAgreement; MAX_REASON_CODES + 1];
         assert!(validate_cbrn_claim(&c).is_err());
     }
 
     #[test]
     fn validate_heavy_requires_specific_reason_code() {
-        let mut c = sample();
+        let mut c = extra_sample();
         c.decision = Decision::Heavy;
         c.reason_codes = vec![ReasonCode::SensorAgreement];
         assert!(validate_cbrn_claim(&c).is_err());
@@ -747,7 +747,7 @@ mod tests {
 
     #[test]
     fn manifest_version_roundtrip() {
-        let c = with_all_fields_populated();
+        let c = extra_sample();
         let v = serde_json::to_vec(&c).expect("serialize");
         let parsed = parse_cbrn_claim_json(&v).expect("parse");
         assert_eq!(
@@ -758,7 +758,7 @@ mod tests {
 
     #[test]
     fn schema_version_roundtrip() {
-        let c = with_all_fields_populated();
+        let c = extra_sample();
         let v = serde_json::to_vec(&c).expect("serialize");
         let parsed = parse_cbrn_claim_json(&v).expect("parse");
         assert_eq!(parsed.schema_version, c.schema_version);
@@ -785,7 +785,7 @@ mod tests {
 
     #[test]
     fn kout_budget_charge_matches_accounting() {
-        let c = with_all_fields_populated();
+        let c = extra_sample();
         let accounting = kout_accounting(&c);
         assert_eq!(kout_budget_charge(&c), accounting.kout_bits as f64);
     }
@@ -797,6 +797,147 @@ mod tests {
         assert_eq!(accounting.kout_bits, 1148);
         assert!(accounting.kout_bits <= accounting.capacity_bits);
     }
+}
+
+#[cfg(test)]
+fn extra_sample() -> CbrnStructuredClaim {
+    CbrnStructuredClaim {
+        schema_version: SchemaVersion::V1_0_0,
+        profile: Profile::CbrnSc,
+        domain: Domain::Cbrn,
+        claim_kind: ClaimKind::Assessment,
+        quantities: vec![QuantizedValue {
+            quantity_kind: QuantityKind::Concentration,
+            value_q: 1,
+            scale: Scale::Unit,
+            unit: SiUnit::MolPerM3,
+        }],
+        envelope_id: [1u8; 32],
+        envelope_check: EnvelopeCheck::Match,
+        references: vec![[2u8; 32]],
+        etl_root: [3u8; 32],
+        envelope_manifest_hash: [4u8; 32],
+        envelope_manifest_version: 1,
+        decision: Decision::Pass,
+        reason_codes: vec![ReasonCode::SensorAgreement],
+    }
+}
+
+#[test]
+fn validate_quantity_boundaries_accept_max_reject_max_plus_one() {
+    let mut c = extra_sample();
+    c.quantities = (0..MAX_QUANTITIES)
+        .map(|_| QuantizedValue {
+            quantity_kind: QuantityKind::Concentration,
+            value_q: 1,
+            scale: Scale::Unit,
+            unit: SiUnit::MolPerM3,
+        })
+        .collect();
+    assert!(validate_cbrn_claim(&c).is_ok());
+
+    c.quantities.push(QuantizedValue {
+        quantity_kind: QuantityKind::Concentration,
+        value_q: 1,
+        scale: Scale::Unit,
+        unit: SiUnit::MolPerM3,
+    });
+    assert!(validate_cbrn_claim(&c).is_err());
+}
+
+#[test]
+fn validate_reference_boundaries_accept_max_reject_max_plus_one() {
+    let mut c = extra_sample();
+    c.references = vec![[4u8; 32]; MAX_REFERENCES];
+    assert!(validate_cbrn_claim(&c).is_ok());
+
+    c.references.push([5u8; 32]);
+    assert!(validate_cbrn_claim(&c).is_err());
+}
+
+#[test]
+fn validate_reason_code_boundaries_accept_max_reject_max_plus_one() {
+    let mut c = extra_sample();
+    c.reason_codes = vec![ReasonCode::SensorAgreement; MAX_REASON_CODES];
+    assert!(validate_cbrn_claim(&c).is_ok());
+
+    c.reason_codes.push(ReasonCode::AboveThreshold);
+    assert!(validate_cbrn_claim(&c).is_err());
+}
+
+#[test]
+fn value_q_boundaries() {
+    let mut c = extra_sample();
+    c.quantities[0].value_q = 0;
+    assert!(validate_cbrn_claim(&c).is_ok());
+
+    c.quantities[0].value_q = i64::MAX;
+    assert!(validate_cbrn_claim(&c).is_ok());
+
+    c.quantities[0].value_q = -1;
+    assert!(validate_cbrn_claim(&c).is_err());
+}
+
+#[test]
+fn heavy_escalate_reason_requirements_accept_and_reject() {
+    let mut heavy = extra_sample();
+    heavy.decision = Decision::Heavy;
+    heavy.reason_codes = vec![ReasonCode::SensorAgreement];
+    assert!(validate_cbrn_claim(&heavy).is_err());
+
+    heavy.reason_codes = vec![ReasonCode::MagnitudeEnvelopeExceeded];
+    assert!(validate_cbrn_claim(&heavy).is_ok());
+
+    let mut escalate = extra_sample();
+    escalate.decision = Decision::Escalate;
+    escalate.reason_codes = vec![ReasonCode::BelowThreshold];
+    assert!(validate_cbrn_claim(&escalate).is_err());
+
+    escalate.reason_codes = vec![ReasonCode::StructuralAnomalyDetected];
+    assert!(validate_cbrn_claim(&escalate).is_ok());
+}
+
+#[test]
+fn parse_rejects_wrong_byte_array_lengths() {
+    let bad_envelope_id = r#"{"schema_version":"v1_0_0","profile":"cbrn_sc","domain":"cbrn","claim_kind":"assessment","quantities":[{"quantity_kind":"concentration","value_q":1,"scale":"unit","unit":"mol_per_m3"}],"envelope_id":[1,2,3],"envelope_check":"match","references":[],"etl_root":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3],"envelope_manifest_hash":[4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],"envelope_manifest_version":1,"decision":"pass","reason_codes":["sensor_agreement"]}"#;
+    assert!(parse_cbrn_claim_json(bad_envelope_id.as_bytes()).is_err());
+
+    let bad_reference = r#"{"schema_version":"v1_0_0","profile":"cbrn_sc","domain":"cbrn","claim_kind":"assessment","quantities":[{"quantity_kind":"concentration","value_q":1,"scale":"unit","unit":"mol_per_m3"}],"envelope_id":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"envelope_check":"match","references":[[1,2,3]],"etl_root":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3],"envelope_manifest_hash":[4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],"envelope_manifest_version":1,"decision":"pass","reason_codes":["sensor_agreement"]}"#;
+    assert!(parse_cbrn_claim_json(bad_reference.as_bytes()).is_err());
+
+    let bad_etl_root = r#"{"schema_version":"v1_0_0","profile":"cbrn_sc","domain":"cbrn","claim_kind":"assessment","quantities":[{"quantity_kind":"concentration","value_q":1,"scale":"unit","unit":"mol_per_m3"}],"envelope_id":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"envelope_check":"match","references":[],"etl_root":[1],"envelope_manifest_hash":[4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],"envelope_manifest_version":1,"decision":"pass","reason_codes":["sensor_agreement"]}"#;
+    assert!(parse_cbrn_claim_json(bad_etl_root.as_bytes()).is_err());
+
+    let bad_manifest_hash = r#"{"schema_version":"v1_0_0","profile":"cbrn_sc","domain":"cbrn","claim_kind":"assessment","quantities":[{"quantity_kind":"concentration","value_q":1,"scale":"unit","unit":"mol_per_m3"}],"envelope_id":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"envelope_check":"match","references":[],"etl_root":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3],"envelope_manifest_hash":[1,2],"envelope_manifest_version":1,"decision":"pass","reason_codes":["sensor_agreement"]}"#;
+    assert!(parse_cbrn_claim_json(bad_manifest_hash.as_bytes()).is_err());
+}
+
+#[test]
+fn canonicalization_manifest_version_is_big_endian() {
+    let mut c = extra_sample();
+    c.envelope_manifest_version = 0x01020304;
+    let bytes = canonicalize_cbrn_claim(&c).expect("canonicalize");
+    let base = 5 + c.quantities.len() * 11 + 32 + 1 + 1 + c.references.len() * 32 + 32 + 32;
+    assert_eq!(&bytes[base..base + 4], &[1, 2, 3, 4]);
+}
+
+#[test]
+fn canonicalization_length_matches_formula() {
+    let c = extra_sample();
+    let bytes = canonicalize_cbrn_claim(&c).expect("canonicalize");
+    let expected_len = 5
+        + c.quantities.len() * 11
+        + 32
+        + 1
+        + 1
+        + c.references.len() * 32
+        + 32
+        + 32
+        + 4
+        + 1
+        + 1
+        + c.reason_codes.len();
+    assert_eq!(bytes.len(), expected_len);
 }
 
 #[cfg(test)]

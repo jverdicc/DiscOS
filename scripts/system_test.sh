@@ -28,6 +28,26 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 
+run_json "${OUT_DIR}/validate_pass.json" \
+  cargo run --quiet -p discos-cli -- claim validate-structured \
+  --input test_vectors/structured_claims/valid/pass_max_boundaries.json
+
+run_json "${OUT_DIR}/validate_heavy.json" \
+  cargo run --quiet -p discos-cli -- claim validate-structured \
+  --input test_vectors/structured_claims/valid/heavy_min.json
+
+if cargo run --quiet -p discos-cli -- claim validate-structured \
+  --input test_vectors/structured_claims/invalid/float_value_q.json >"${OUT_DIR}/validate_invalid_float.json" 2>&1; then
+  echo "invalid float vector unexpectedly accepted" >&2
+  exit 1
+fi
+
+if cargo run --quiet -p discos-cli -- claim validate-structured \
+  --input test_vectors/structured_claims/invalid/heavy_missing_reason.json >"${OUT_DIR}/validate_invalid_heavy.json" 2>&1; then
+  echo "invalid heavy vector unexpectedly accepted" >&2
+  exit 1
+fi
+
 run_json "${OUT_DIR}/create_a.json" \
   cargo run --quiet -p discos-cli -- --endpoint "${ADDR}" claim create \
   --claim-name claim-a --alpha-micros 50000 --lane high_assurance --epoch-config-ref epoch/default \

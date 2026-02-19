@@ -9,7 +9,7 @@ DiscOS is the untrusted userland client and builder for EvidenceOS.
 ### 1) Run EvidenceOS
 
 ```bash
-cargo run -p evidenceos-daemon -- --listen 127.0.0.1:50051 --etl-path ./data/etl.log
+cargo run -p evidenceos-daemon -- --listen 127.0.0.1:50051 --data-dir ./data
 ```
 
 ### 2) Build DiscOS
