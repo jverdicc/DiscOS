@@ -32,6 +32,9 @@ jobs:
           cargo install cargo-llvm-cov --locked
           cargo install cargo-fuzz --locked
 
+      - name: Check coverage threshold drift
+        run: ./scripts/check_coverage_threshold_drift.sh
+
       - name: Run format, clippy, tests, coverage evidence script
         run: ./scripts/test_evidence.sh
 

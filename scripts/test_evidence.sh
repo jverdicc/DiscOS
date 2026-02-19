@@ -2,13 +2,14 @@
 set -euo pipefail
 
 ARTIFACT_DIR="artifacts/ci"
+COVERAGE_THRESHOLD_LINES=95
 mkdir -p "$ARTIFACT_DIR"
 
 cargo fmt --all -- --check | tee "$ARTIFACT_DIR/discos_fmt_output.txt"
 cargo clippy --workspace --all-targets --all-features -- -D warnings | tee "$ARTIFACT_DIR/clippy-report.txt"
 cargo test --workspace --all-targets --all-features | tee "$ARTIFACT_DIR/test_output.txt"
 
-cargo llvm-cov --workspace --all-features --lcov --output-path "$ARTIFACT_DIR/coverage.lcov" --fail-under-lines 95 \
+cargo llvm-cov --workspace --all-features --lcov --output-path "$ARTIFACT_DIR/coverage.lcov" --fail-under-lines "$COVERAGE_THRESHOLD_LINES" \
   | tee "$ARTIFACT_DIR/discos_coverage_output.txt"
 
 (

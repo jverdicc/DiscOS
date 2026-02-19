@@ -13,8 +13,10 @@ DiscOS uses a repo-level evidence harness mirroring EvidenceOS-style CI gates.
 
 `make test-evidence` enforces package-level coverage floors:
 
-- `discos-core` line coverage **>= 90%**.
-- `discos-client` line coverage **>= 80%**.
+- `discos-core` line coverage **>= 95%**.
+- `discos-client` line coverage **>= 95%**.
+
+`make check-coverage-threshold-drift` validates that coverage thresholds in script, Makefile, and docs stay aligned.
 
 ## Produced artifacts
 
