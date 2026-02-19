@@ -28,3 +28,7 @@ tempfile = "3"
 tokio-stream = "0.1"
 wasmparser = "0.220"
 wat = "1"
+
+[[test]]
+name = "agent_resilience"
+path = "../../tests/agent_resilience.rs"
