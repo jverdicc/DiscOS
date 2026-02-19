@@ -5,7 +5,8 @@ DiscOS tracks the EvidenceOS public protocol surface using a **vendored protocol
 ## Current compatibility target
 
 - **DiscOS workspace version:** `0.1.0`
-- **EvidenceOS upstream repository:** `https://github.com/EvidenceOS/evidenceos.git`
+- **EvidenceOS upstream repository:** `https://github.com/evidenceos/evidenceos.git`
+- **Override upstream for forks/mirrors:** set `EVIDENCEOS_REPO` when running checks (example: `EVIDENCEOS_REPO=$HOME/src/evidenceos ./scripts/check_evidenceos_proto_sync.sh`)
 - **EvidenceOS compatibility revision:** `3f8b95a6615874d80526e447cb33ad0396b079f4`
 - **Protocol package:** `evidenceos.v1` (from `crates/evidenceos-protocol/proto/evidenceos.proto`)
 

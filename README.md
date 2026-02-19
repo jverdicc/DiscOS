@@ -10,7 +10,11 @@ Compatibility target is documented in [`COMPATIBILITY.md`](COMPATIBILITY.md).
 
 ### 1) Run EvidenceOS
 
+From a clean machine/clone, run EvidenceOS in a separate terminal:
+
 ```bash
+git clone https://github.com/evidenceos/evidenceos.git
+cd evidenceos
 cargo run -p evidenceos-daemon -- --listen 127.0.0.1:50051 --data-dir ./data
 ```
 
@@ -66,7 +70,13 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 watch-revocations
 
 DiscOS is untrusted userland for the EvidenceOS verifier: it helps operators create claim artifacts, run deterministic client-side preparation, and call the EvidenceOS gRPC lifecycle APIs. It is **not** a second verifier, and it does not expand trust boundaries beyond what the EvidenceOS daemon accepts. DiscOS aligns with the UVP threat model by keeping verifier authority in EvidenceOS while still providing practical tooling for reproducible experiments and machine-parseable workflows.
 
-For the full architecture and protocol summary, see the EvidenceOS README: <https://github.com/EvidenceOS/evidenceos/blob/main/README.md>.
+For the full architecture and protocol summary, see the EvidenceOS README: <https://github.com/evidenceos/evidenceos/blob/main/README.md>.
+
+## Repo map
+
+- **Client code:** `crates/discos-client/` (typed gRPC client), `crates/discos-cli/` (operator CLI).
+- **Experiments/simulations:** `crates/discos-core/src/experiments/` with integration coverage in `tests/experiments_integration.rs`.
+- **System tests:** run `./scripts/system_test.sh` (writes artifacts under `artifacts/system-test/`).
 
 ## Reproducing stress-test sims
 
