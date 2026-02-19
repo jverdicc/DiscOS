@@ -2,7 +2,7 @@
 
 # DiscOS (Rust)
 
-DiscOS is the untrusted userland client and builder for EvidenceOS.
+DiscOS is the untrusted discovery/client/tooling layer for EvidenceOS. EvidenceOS is the verifier daemon and policy boundary; DiscOS is the operator-facing interface that builds claim artifacts, computes deterministic metadata, submits lifecycle RPCs, and retrieves verifiable outputs.
 
 ## Quickstart
 
@@ -27,9 +27,11 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 health
 ## Claim lifecycle commands
 
 ```bash
-# Create a claim and local artifacts
+# Create a local claim workspace + manifests, compute a local topic_id, and call create_claim_v2
 cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 \
-  claim create --claim-id demo-1 --lane cbrn --alpha-micros 50000 --epoch-config-ref epoch/v1
+  claim create --claim-name demo-1 --lane cbrn --alpha-micros 50000 \
+  --epoch-config-ref epoch/v1 --output-schema-id cbrn-sc.v1 \
+  --holdout-ref holdout/default --epoch-size 1024 --oracle-num-symbols 1024 --access-credit 100000
 
 # Commit wasm + manifests
 cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 \
@@ -38,7 +40,8 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 \
   --manifests .discos/claims/demo-1/phys_hir.json \
   --manifests .discos/claims/demo-1/causal_dsl.json
 
-# Seal and execute
+# Freeze, seal, and execute
+cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 claim freeze --claim-id demo-1
 cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 claim seal --claim-id demo-1
 cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 claim execute --claim-id demo-1
 
