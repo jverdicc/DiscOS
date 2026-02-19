@@ -1,4 +1,4 @@
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18685556.svg)](https://doi.org/10.5281/zenodo.18685556)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18676016.svg)](https://doi.org/10.5281/zenodo.18676016)
 
 # DiscOS (Rust)
 
@@ -57,25 +57,18 @@ Simulation/attack tooling remains feature-gated under `sim`.
 
 ## Technical Summary
 
-DiscOS and EvidenceOS are intentionally split into two trust domains. EvidenceOS is the long-lived daemon that enforces policy, validates inputs, executes deterministic claim transitions, and writes auditable state. DiscOS is the rapidly iterated userland that helps humans and automation discover protocol surfaces, assemble claims, and operate workflows without expanding the trusted computing base. In practice, this means operators can improve UX and orchestration in DiscOS while relying on EvidenceOS to make final accept/reject decisions at a narrow, auditable boundary.
+DiscOS is the contributor-facing Rust userland for EvidenceOS. In practical terms, DiscOS provides the tools engineers use day-to-day to build claims, submit artifacts, run controlled experiments, and retrieve verification outputs, while EvidenceOS remains the protocol-verifying daemon that decides what is admissible. This separation keeps runtime trust boundaries clear: DiscOS is intentionally flexible and operator-friendly, but protocol acceptance still happens inside EvidenceOS through deterministic validation paths.
 
-From an architecture standpoint, DiscOS behaves like a protocol-aware client toolkit. The CLI and libraries generate claim artifacts (WASM payloads and manifests), construct claim metadata, derive deterministic identifiers (for example TopicID inputs), and call EvidenceOS gRPC endpoints in lifecycle order (`create -> commit -> freeze -> seal -> execute -> fetch`). EvidenceOS does not trust those client-side artifacts by assertion alone; it re-checks constraints server-side before transitioning state. That separation is key to interoperability: any compatible client can submit claims, but only verifier-accepted claims become certified outputs.
+From a workflow perspective, DiscOS is organized around three roles. First, it is a **client**: the CLI talks to EvidenceOS over stable IPC/gRPC interfaces for health checks, claim lifecycle operations, and retrieval endpoints. Second, it is a **harness**: it helps assemble local claim artifacts (for example wasm payloads and manifests), stages those artifacts for commit/seal/execute flows, and captures outputs in reproducible local layouts that can be inspected or replayed. Third, it is an **experimentation surface**: feature-gated simulation and attack-oriented tooling let contributors probe boundary behavior without changing protocol-verifier logic in EvidenceOS itself.
 
-Structured claims are represented using the CBRN-SC profile and canonically serialized for stable hashing and replay. DiscOS validates and canonicalizes claim JSON before submission and persistence, ensuring semantically equivalent claims map to a deterministic byte representation. The canonical schema identifier is `cbrn-sc.v1`, matching EvidenceOS expectations for output schema metadata and reducing ambiguity across services, logs, and downstream analytics. Where older aliases exist, DiscOS normalizes to this canonical ID before building claim metadata so that topic derivation and server RPC metadata remain consistent.
+The claim lifecycle commands shown in this repository demonstrate that integration contract. A typical path is create → commit → seal → execute → fetch-capsule, with optional ETL verification and revocation monitoring. DiscOS makes these flows easy to script, but it does not bypass verification: each lifecycle transition must satisfy EvidenceOS checks before state can advance. That means command ergonomics can evolve without weakening the kernel boundary, as long as the gRPC/proto contract and machine-parseable outputs stay stable.
 
-`k_out` accounting is treated as a first-class safety mechanism rather than an optional metric. DiscOS computes structured-claim complexity/size-derived bits via deterministic accounting functions (`kout_accounting`, `kout_bits`, `kout_budget_charge`) and tests monotonic behavior across claim growth. EvidenceOS then applies conservation-ledger style checks to enforce budget constraints over time. The practical effect is that claim complexity contributes to an explicit resource budget, which helps prevent unbounded evidence inflation and creates machine-checkable limits for automated policy.
+EvidenceOS integration is deliberately explicit in artifact shape and evidence semantics. DiscOS prepares manifests and related inputs expected by verifier policy, while EvidenceOS evaluates admissibility, deterministic preconditions, and certification constraints. The resulting capsule is a transportable output bundle containing claim material plus verifier-relevant metadata and commitments needed for independent downstream checks. ETL-related features in DiscOS (such as capsule verification and revocation watching) are therefore not side channels; they are operator tools for interacting with the transparency guarantees produced by EvidenceOS.
 
-ETL (Evidence Transparency Log) integration ties claim outputs to append-only accountability. Structured claims include ETL roots and envelope material (`envelope_id`, `envelope_manifest_hash`, and manifest version) so relying parties can verify that a capsule’s evidence lineage and envelope bindings are consistent with logged state. In end-to-end tests, DiscOS chains parse/validate/canonicalize, `k_out` accounting, ledger charging, ETL append, inclusion-proof generation, inclusion verification, and tamper detection. This pipeline demonstrates the intended deployment model: DiscOS assembles and verifies locally for operator confidence, while EvidenceOS supplies authoritative adjudication plus transparent, independently checkable log proofs.
+For contributors, this architecture has two important implications. First, improvements to DiscOS should prioritize repeatability and interoperability: deterministic simulation paths, stable CLI output formats, and strict compatibility with the EvidenceOS proto surface are non-negotiable because downstream tooling depends on them. Second, metadata and project health matter as much as command behavior. Accurate citation records, clear contribution guidance, issue/PR templates, and support/security policies make it easier for external teams to adopt the toolchain correctly and report problems in a way maintainers can triage quickly.
 
-## Reproducibility
+In short, DiscOS is not a second verifier and not a replacement for EvidenceOS. It is the operational shell around the verifier: the place where practitioners construct inputs, run harnessed experiments, automate lifecycle execution, and package evidence artifacts for independent review. EvidenceOS supplies protocol authority; DiscOS supplies contributor and operator velocity while preserving that authority boundary.
 
-For reproducible local verification of formatting, linting, tests, coverage, and fuzz smoke checks, run:
-
-```bash
-scripts/test_evidence.sh
-```
-
-The script is the project’s canonical CI-like local validation path.
 
 ## License
 
