@@ -25,7 +25,9 @@ use thiserror::Error;
 
 const MAX_MERKLE_PATH_LEN: usize = 64;
 
-pub use evidenceos_protocol::pb;
+pub mod pb {
+    pub use evidenceos_protocol::pb::v2::*;
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCode {
@@ -79,17 +81,6 @@ impl DiscosClient {
             .map(|r| r.into_inner())
     }
 
-    pub async fn create_claim(
-        &mut self,
-        req: pb::CreateClaimRequest,
-    ) -> Result<pb::CreateClaimResponse, ClientError> {
-        self.inner
-            .create_claim(req)
-            .await
-            .map(|r| r.into_inner())
-            .map_err(|e| ClientError::Kernel(e.to_string()))
-    }
-
     pub async fn create_claim_v2(
         &mut self,
         req: pb::CreateClaimV2Request,
@@ -112,34 +103,23 @@ impl DiscosClient {
             .map_err(|e| ClientError::Kernel(e.to_string()))
     }
 
-    pub async fn freeze_gates(
+    pub async fn commit_wasm(
         &mut self,
-        req: pb::FreezeGatesRequest,
-    ) -> Result<pb::FreezeGatesResponse, ClientError> {
+        req: pb::CommitWasmRequest,
+    ) -> Result<pb::CommitWasmResponse, ClientError> {
         self.inner
-            .freeze_gates(req)
+            .commit_wasm(req)
             .await
             .map(|r| r.into_inner())
             .map_err(|e| ClientError::Kernel(e.to_string()))
     }
 
-    pub async fn seal_claim(
+    pub async fn freeze(
         &mut self,
-        req: pb::SealClaimRequest,
-    ) -> Result<pb::SealClaimResponse, ClientError> {
+        req: pb::FreezeRequest,
+    ) -> Result<pb::FreezeResponse, ClientError> {
         self.inner
-            .seal_claim(req)
-            .await
-            .map(|r| r.into_inner())
-            .map_err(|e| ClientError::Kernel(e.to_string()))
-    }
-
-    pub async fn execute_claim(
-        &mut self,
-        req: pb::ExecuteClaimRequest,
-    ) -> Result<pb::ExecuteClaimResponse, ClientError> {
-        self.inner
-            .execute_claim(req)
+            .freeze(req)
             .await
             .map(|r| r.into_inner())
             .map_err(|e| ClientError::Kernel(e.to_string()))

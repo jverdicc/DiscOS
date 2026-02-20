@@ -47,12 +47,6 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
             status: "ok".into(),
         }))
     }
-    async fn create_claim(
-        &self,
-        _: Request<pb::CreateClaimRequest>,
-    ) -> Result<Response<pb::CreateClaimResponse>, Status> {
-        Err(Status::unimplemented("v2 only"))
-    }
     async fn create_claim_v2(
         &self,
         req: Request<pb::CreateClaimV2Request>,
@@ -74,23 +68,17 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
             accepted: true,
         }))
     }
-    async fn freeze_gates(
+    async fn commit_wasm(
         &self,
-        _: Request<pb::FreezeGatesRequest>,
-    ) -> Result<Response<pb::FreezeGatesResponse>, Status> {
-        Ok(Response::new(pb::FreezeGatesResponse { frozen: true }))
+        _: Request<pb::CommitWasmRequest>,
+    ) -> Result<Response<pb::CommitWasmResponse>, Status> {
+        Ok(Response::new(pb::CommitWasmResponse { accepted: true }))
     }
-    async fn seal_claim(
+    async fn freeze(
         &self,
-        _: Request<pb::SealClaimRequest>,
-    ) -> Result<Response<pb::SealClaimResponse>, Status> {
-        Ok(Response::new(pb::SealClaimResponse { sealed: true }))
-    }
-    async fn execute_claim(
-        &self,
-        _: Request<pb::ExecuteClaimRequest>,
-    ) -> Result<Response<pb::ExecuteClaimResponse>, Status> {
-        Err(Status::unimplemented("v2 only"))
+        _: Request<pb::FreezeRequest>,
+    ) -> Result<Response<pb::FreezeResponse>, Status> {
+        Ok(Response::new(pb::FreezeResponse { frozen: true }))
     }
     async fn execute_claim_v2(
         &self,
@@ -200,7 +188,7 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
     ) -> Result<Response<pb::GetServerInfoResponse>, Status> {
         Ok(Response::new(pb::GetServerInfoResponse {
             proto_hash: "test-proto-hash".into(),
-            protocol_package: "evidenceos.v1".into(),
+            protocol_package: "evidenceos.v2".into(),
             git_commit: "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af".into(),
             build_timestamp: "2026-01-01T00:00:00Z".into(),
             key_ids: vec!["k1".into()],
@@ -260,22 +248,22 @@ async fn e2e_v2_daemon_contract_verification() {
         .expect("create");
     c.commit_artifacts(pb::CommitArtifactsRequest {
         claim_id: created.claim_id.clone(),
-        wasm_hash: vec![],
-        wasm_module: vec![],
         manifests: vec![],
     })
     .await
-    .expect("commit");
-    c.freeze_gates(pb::FreezeGatesRequest {
+    .expect("commit artifacts");
+    c.commit_wasm(pb::CommitWasmRequest {
+        claim_id: created.claim_id.clone(),
+        wasm_hash: vec![],
+        wasm_module: vec![],
+    })
+    .await
+    .expect("commit wasm");
+    c.freeze(pb::FreezeRequest {
         claim_id: created.claim_id.clone(),
     })
     .await
     .expect("freeze");
-    c.seal_claim(pb::SealClaimRequest {
-        claim_id: created.claim_id.clone(),
-    })
-    .await
-    .expect("seal");
     c.execute_claim_v2(pb::ExecuteClaimV2Request {
         claim_id: created.claim_id.clone(),
     })

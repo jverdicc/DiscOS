@@ -25,13 +25,6 @@ impl pb::evidence_os_server::EvidenceOs for ProbeMockDaemon {
         }))
     }
 
-    async fn create_claim(
-        &self,
-        _: Request<pb::CreateClaimRequest>,
-    ) -> Result<Response<pb::CreateClaimResponse>, Status> {
-        Err(Status::unimplemented("v2 only"))
-    }
-
     async fn create_claim_v2(
         &self,
         req: Request<pb::CreateClaimV2Request>,
@@ -60,26 +53,17 @@ impl pb::evidence_os_server::EvidenceOs for ProbeMockDaemon {
             accepted: true,
         }))
     }
-
-    async fn freeze_gates(
+    async fn commit_wasm(
         &self,
-        _: Request<pb::FreezeGatesRequest>,
-    ) -> Result<Response<pb::FreezeGatesResponse>, Status> {
-        Ok(Response::new(pb::FreezeGatesResponse { frozen: true }))
+        _: Request<pb::CommitWasmRequest>,
+    ) -> Result<Response<pb::CommitWasmResponse>, Status> {
+        Ok(Response::new(pb::CommitWasmResponse { accepted: true }))
     }
-
-    async fn seal_claim(
+    async fn freeze(
         &self,
-        _: Request<pb::SealClaimRequest>,
-    ) -> Result<Response<pb::SealClaimResponse>, Status> {
-        Ok(Response::new(pb::SealClaimResponse { sealed: true }))
-    }
-
-    async fn execute_claim(
-        &self,
-        _: Request<pb::ExecuteClaimRequest>,
-    ) -> Result<Response<pb::ExecuteClaimResponse>, Status> {
-        Err(Status::unimplemented("v2 only"))
+        _: Request<pb::FreezeRequest>,
+    ) -> Result<Response<pb::FreezeResponse>, Status> {
+        Ok(Response::new(pb::FreezeResponse { frozen: true }))
     }
 
     async fn execute_claim_v2(
