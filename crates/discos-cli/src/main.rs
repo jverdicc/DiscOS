@@ -31,6 +31,8 @@ use discos_client::{
     pb, verify_consistency, verify_inclusion, verify_sth_signature, ConsistencyProof, DiscosClient,
     InclusionProof, SignedTreeHead,
 };
+#[cfg(feature = "sim")]
+use discos_core::experiments::exp7b::{run_exp7b, Exp7bConfig};
 use discos_core::{
     structured_claims::{
         canonicalize_cbrn_claim, parse_cbrn_claim_json, validate_cbrn_claim, CbrnStructuredClaim,
@@ -94,6 +96,11 @@ enum Command {
         #[command(subcommand)]
         cmd: ScenarioCommand,
     },
+    #[cfg(feature = "sim")]
+    Sim {
+        #[command(subcommand)]
+        cmd: SimCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -128,6 +135,12 @@ enum ScenarioCommand {
         #[arg(long, default_value_t = false)]
         verify_etl: bool,
     },
+}
+
+#[cfg(feature = "sim")]
+#[derive(Debug, Subcommand)]
+enum SimCommand {
+    Run { experiment_id: String },
 }
 
 #[derive(Debug, Subcommand)]
@@ -422,6 +435,47 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
         },
+        #[cfg(feature = "sim")]
+        Command::Sim { cmd } => match cmd {
+            SimCommand::Run { experiment_id } => {
+                if experiment_id != "exp7b" {
+                    anyhow::bail!("unknown experiment_id: {experiment_id}");
+                }
+
+                let result = run_exp7b(&Exp7bConfig::default()).await?;
+                let out_dir = PathBuf::from("artifacts/sim");
+                fs::create_dir_all(&out_dir)
+                    .with_context(|| format!("create artifact dir {}", out_dir.display()))?;
+
+                let json_path = out_dir.join("exp7b_results.json");
+                write_json_file(&json_path, &result)?;
+
+                let md_path = out_dir.join("exp7b_results.md");
+                let md = format!(
+                    "# exp7b: Correlation hole simulation\n\n{}\n\n- trials: {}\n- threshold: {}\n\n## Correlated (E1 = E2)\n- false_positive_rate_product: {:.6}\n- false_positive_rate_emerge: {:.6}\n\n## Independent\n- false_positive_rate_product: {:.6}\n- false_positive_rate_emerge: {:.6}\n",
+                    result.note,
+                    result.trials,
+                    result.threshold,
+                    result.correlated.false_positive_rate_product,
+                    result.correlated.false_positive_rate_emerge,
+                    result.independent.false_positive_rate_product,
+                    result.independent.false_positive_rate_emerge
+                );
+                fs::write(&md_path, md)
+                    .with_context(|| format!("write artifact {}", md_path.display()))?;
+
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "ok": true,
+                        "experiment_id": experiment_id,
+                        "json_artifact": json_path,
+                        "md_artifact": md_path
+                    })
+                );
+            }
+        },
+
         Command::ServerInfo => {
             let mut client = DiscosClient::connect(&args.endpoint).await?;
             let info = client.get_server_info().await?;
