@@ -17,11 +17,22 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
+
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use evidenceos_core::crypto_transcripts;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
+use tonic::{
+    metadata::MetadataValue,
+    service::Interceptor,
+    transport::{Certificate, Channel, ClientTlsConfig, Endpoint, Identity},
+    Request, Status,
+};
 
 const MAX_MERKLE_PATH_LEN: usize = 64;
 
@@ -61,15 +72,128 @@ impl ClientError {
 }
 
 #[derive(Debug, Clone)]
+pub struct ClientTlsOptions {
+    pub ca_cert_pem: Vec<u8>,
+    pub domain_name: Option<String>,
+    pub client_cert_pem: Option<Vec<u8>>,
+    pub client_key_pem: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ClientAuth {
+    BearerToken(String),
+    HmacSha256 { key_id: String, secret: Vec<u8> },
+}
+
+#[derive(Debug, Clone)]
+pub struct ClientConnectConfig {
+    pub endpoint: String,
+    pub tls: Option<ClientTlsOptions>,
+    pub auth: Option<ClientAuth>,
+}
+
+#[derive(Debug, Clone)]
+struct AuthInterceptor {
+    auth: Option<ClientAuth>,
+    nonce: Arc<AtomicU64>,
+}
+
+impl AuthInterceptor {
+    fn new(auth: Option<ClientAuth>) -> Self {
+        Self {
+            auth,
+            nonce: Arc::new(AtomicU64::new(1)),
+        }
+    }
+}
+
+impl Interceptor for AuthInterceptor {
+    fn call(&mut self, mut request: Request<()>) -> Result<Request<()>, Status> {
+        match &self.auth {
+            None => Ok(request),
+            Some(ClientAuth::BearerToken(token)) => {
+                let value = MetadataValue::try_from(format!("Bearer {token}")).map_err(|e| {
+                    Status::invalid_argument(format!("invalid authorization token: {e}"))
+                })?;
+                request.metadata_mut().insert("authorization", value);
+                Ok(request)
+            }
+            Some(ClientAuth::HmacSha256 { key_id, secret }) => {
+                let request_id = format!("discos-{}", self.nonce.fetch_add(1, Ordering::Relaxed));
+                let request_id_value = MetadataValue::try_from(request_id.as_str())
+                    .map_err(|e| Status::invalid_argument(format!("invalid request id: {e}")))?;
+                request
+                    .metadata_mut()
+                    .insert("x-evidenceos-request-id", request_id_value);
+
+                let signing_material = format!("{}:{}", request_id, request.uri().path());
+                let signature_hex = hex::encode(hmac_sha256(secret, signing_material.as_bytes()));
+                let signature_value = MetadataValue::try_from(signature_hex)
+                    .map_err(|e| Status::invalid_argument(format!("invalid signature: {e}")))?;
+                let key_id_value = MetadataValue::try_from(key_id.as_str())
+                    .map_err(|e| Status::invalid_argument(format!("invalid key id: {e}")))?;
+                request
+                    .metadata_mut()
+                    .insert("x-evidenceos-signature", signature_value);
+                request
+                    .metadata_mut()
+                    .insert("x-evidenceos-key-id", key_id_value);
+                Ok(request)
+            }
+        }
+    }
+}
+
+type InterceptedChannel = tonic::service::interceptor::InterceptedService<Channel, AuthInterceptor>;
+
+#[derive(Debug, Clone)]
 pub struct DiscosClient {
-    inner: pb::evidence_os_client::EvidenceOsClient<tonic::transport::Channel>,
+    inner: pb::evidence_os_client::EvidenceOsClient<InterceptedChannel>,
 }
 
 impl DiscosClient {
     pub async fn connect(endpoint: &str) -> Result<Self, ClientError> {
-        let inner = pb::evidence_os_client::EvidenceOsClient::connect(endpoint.to_string())
+        Self::connect_with_config(ClientConnectConfig {
+            endpoint: endpoint.to_string(),
+            tls: None,
+            auth: None,
+        })
+        .await
+    }
+
+    pub async fn connect_with_config(config: ClientConnectConfig) -> Result<Self, ClientError> {
+        let mut endpoint = Endpoint::from_shared(config.endpoint)
+            .map_err(|e| ClientError::InvalidInput(format!("invalid endpoint: {e}")))?;
+
+        if let Some(tls) = config.tls {
+            let mut tls_config =
+                ClientTlsConfig::new().ca_certificate(Certificate::from_pem(tls.ca_cert_pem));
+            if let Some(domain_name) = tls.domain_name {
+                tls_config = tls_config.domain_name(domain_name);
+            }
+            match (tls.client_cert_pem, tls.client_key_pem) {
+                (Some(cert), Some(key)) => {
+                    tls_config = tls_config.identity(Identity::from_pem(cert, key));
+                }
+                (None, None) => {}
+                _ => {
+                    return Err(ClientError::InvalidInput(
+                        "mTLS requires both client_cert_pem and client_key_pem".to_string(),
+                    ));
+                }
+            }
+            endpoint = endpoint
+                .tls_config(tls_config)
+                .map_err(|e| ClientError::InvalidInput(format!("invalid tls config: {e}")))?;
+        }
+
+        let channel = endpoint
+            .connect()
             .await
             .map_err(|e| ClientError::Transport(e.to_string()))?;
+        let interceptor = AuthInterceptor::new(config.auth);
+        let inner =
+            pb::evidence_os_client::EvidenceOsClient::with_interceptor(channel, interceptor);
         Ok(Self { inner })
     }
 
@@ -320,6 +444,35 @@ pub fn sha256(input: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(input);
     hasher.finalize().into()
+}
+
+fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
+    const BLOCK_SIZE: usize = 64;
+
+    let mut key_block = [0u8; BLOCK_SIZE];
+    if key.len() > BLOCK_SIZE {
+        let hashed = sha256(key);
+        key_block[..hashed.len()].copy_from_slice(&hashed);
+    } else {
+        key_block[..key.len()].copy_from_slice(key);
+    }
+
+    let mut ipad = [0x36u8; BLOCK_SIZE];
+    let mut opad = [0x5cu8; BLOCK_SIZE];
+    for i in 0..BLOCK_SIZE {
+        ipad[i] ^= key_block[i];
+        opad[i] ^= key_block[i];
+    }
+
+    let mut inner = Sha256::new();
+    inner.update(ipad);
+    inner.update(data);
+    let inner_hash = inner.finalize();
+
+    let mut outer = Sha256::new();
+    outer.update(opad);
+    outer.update(inner_hash);
+    outer.finalize().into()
 }
 
 pub fn sha256_domain(domain: &[u8], payload: &[u8]) -> [u8; 32] {
