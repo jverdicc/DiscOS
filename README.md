@@ -4,6 +4,8 @@
 
 ## 👉 Start here
 
+Start here: threat model walkthrough: [docs/threat_model_worked_example.md](docs/threat_model_worked_example.md).
+
 New to the project? Begin with the reader guide: [docs/START_HERE.md](docs/START_HERE.md).
 
 DiscOS is the untrusted discovery/client/tooling layer for EvidenceOS. EvidenceOS is the verifier daemon and policy boundary; DiscOS is the operator-facing interface that builds claim artifacts, computes deterministic metadata, submits lifecycle RPCs, and retrieves verifiable outputs.
