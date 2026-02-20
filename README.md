@@ -2,6 +2,10 @@
 
 # DiscOS (Rust)
 
+## 👉 Start here
+
+New to the project? Begin with the reader guide: [docs/START_HERE.md](docs/START_HERE.md).
+
 DiscOS is the untrusted discovery/client/tooling layer for EvidenceOS. EvidenceOS is the verifier daemon and policy boundary; DiscOS is the operator-facing interface that builds claim artifacts, computes deterministic metadata, submits lifecycle RPCs, and retrieves verifiable outputs.
 
 ➡️ EvidenceOS repository: <https://github.com/jverdicc/EvidenceOS>
