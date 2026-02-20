@@ -261,13 +261,24 @@ project.
 - **Threat / probe pattern:** Repeated probing budget exhaustion against bounded topic controls. **Expected verifier response:** `FROZEN`. **How to reproduce:** `cargo run -p discos-cli -- scenario run repeated-probing-budget-freeze`.
 - **Threat / probe pattern:** Sybil-style scaling over topic-flat identities. **Expected verifier response:** `THROTTLE`/bounded success trend (no unbounded gains). **How to reproduce:** `cargo run -p discos-cli -- scenario run sybil-scaling-topic-flat-success`.
 
+## Verification Matrix: real-world what-if scenarios
+
+Scenario suite artifacts are written under [`artifacts/scenarios/`](artifacts/scenarios/), one folder per scenario (`run.json` + `run.md`).
+
+| Scenario | Practical probe pattern | Expected response |
+| --- | --- | --- |
+| `rapid-repeated-tool-calls` | Rapid repeated calls with identical params (duplication probing) | `REQUIRE_HUMAN` (after throttle/escalation progression) |
+| `cross-tool-differential-probing` | Same objective attempted across different tool names | `REQUIRE_HUMAN` |
+| `identity-rotation-stable-topic` | `agentId` rotates while session/topic remain stable | `REQUIRE_HUMAN` |
+| `benign-mixed-traffic` | Benign mixed traffic with distinct objectives | `ALLOW` |
+
 ## Reproduce scenario evidence
 
 ```bash
 make test-evidence
 ./scripts/system_test.sh
 cargo run -p discos-cli -- scenario list
-cargo run -p discos-cli -- scenario run repeated-probing-budget-freeze
+cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 scenario run-suite
 cargo run -p discos-cli -- scenario run sybil-scaling-topic-flat-success
 cargo run -p discos-cli -- scenario run stale-proof-fails-closed --verify-etl
 ```
