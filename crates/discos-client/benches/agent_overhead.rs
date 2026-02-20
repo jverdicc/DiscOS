@@ -3,6 +3,7 @@ use std::sync::Arc;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use discos_client::{pb, DiscosClient};
 use ed25519_dalek::{Signer, SigningKey};
+use evidenceos_core::crypto_transcripts;
 use serde::Serialize;
 use sha2::Digest;
 use tokio::runtime::Runtime;
@@ -101,16 +102,10 @@ impl pb::evidence_os_server::EvidenceOs for BenchDaemon {
         }))
         .map_err(|e| Status::internal(e.to_string()))?;
 
-        let leaf_hash = [9u8; 32];
-        let mut signature_payload = Vec::new();
-        signature_payload.extend_from_slice(&1u64.to_be_bytes());
-        signature_payload.extend_from_slice(&leaf_hash);
+        let leaf_hash = crypto_transcripts::etl_leaf_hash(&capsule);
         let sth_signature = self
             .signing_key
-            .sign(&discos_client::sha256_domain(
-                evidenceos_protocol::domains::STH_SIGNATURE_V1,
-                &signature_payload,
-            ))
+            .sign(&crypto_transcripts::sth_signature_digest(1, leaf_hash))
             .to_bytes()
             .to_vec();
 
@@ -150,15 +145,9 @@ impl pb::evidence_os_server::EvidenceOs for BenchDaemon {
         _: Request<pb::GetSignedTreeHeadRequest>,
     ) -> Result<Response<pb::GetSignedTreeHeadResponse>, Status> {
         let root_hash = [9u8; 32];
-        let mut signature_payload = Vec::new();
-        signature_payload.extend_from_slice(&1u64.to_be_bytes());
-        signature_payload.extend_from_slice(&root_hash);
         let signature = self
             .signing_key
-            .sign(&discos_client::sha256_domain(
-                evidenceos_protocol::domains::STH_SIGNATURE_V1,
-                &signature_payload,
-            ))
+            .sign(&crypto_transcripts::sth_signature_digest(1, root_hash))
             .to_bytes()
             .to_vec();
 
