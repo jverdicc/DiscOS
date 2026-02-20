@@ -13,3 +13,9 @@ This folder contains test evidence, scenario fixtures, and threat-model explaine
 ## Scenario fixtures
 
 Deterministic scenario inputs are under [`docs/scenarios/`](scenarios/).
+
+## ETL FAQ
+
+- **Is this a blockchain?** No. DiscOS/EvidenceOS require an Evidence Transparency Log (ETL): a CT-style append-only Merkle transparency log. A blockchain is not required.
+- **What security property do we need?** Append-only operation with inclusion/consistency proofs and signed tree heads so auditors can verify history.
+

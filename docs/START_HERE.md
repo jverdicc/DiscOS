@@ -28,6 +28,12 @@ Read in this order:
 2. [EvidenceOS TLS/auth guidance](https://github.com/jverdicc/EvidenceOS#security--auth)
 3. [DiscOS runbook-style lifecycle commands](../README.md#claim-lifecycle-commands)
 
+
+## ETL FAQ
+
+- **Is this a blockchain?** No. A CT-style append-only Merkle transparency log (Evidence Transparency Log, ETL) is enough; blockchain is not required.
+- **What security property do we need?** Append-only behavior plus verifiable inclusion/consistency proofs and signed tree heads.
+
 ## Terminology bridge
 
 | Systems term | Safety/evals term |
