@@ -4,9 +4,16 @@
 
 DiscOS is the untrusted discovery/client/tooling layer for EvidenceOS. EvidenceOS is the verifier daemon and policy boundary; DiscOS is the operator-facing interface that builds claim artifacts, computes deterministic metadata, submits lifecycle RPCs, and retrieves verifiable outputs.
 
-➡️ EvidenceOS repository: <https://github.com/evidenceos/evidenceos>
+➡️ EvidenceOS repository: <https://github.com/jverdicc/EvidenceOS>
 
 Compatibility target is documented in [`COMPATIBILITY.md`](COMPATIBILITY.md).
+
+## Integration status
+
+- **Default endpoint:** DiscOS uses the EvidenceOS gRPC daemon endpoint on `127.0.0.1:50051`.
+- **HTTP preflight endpoint:** `127.0.0.1:8787` is optional and only applies when CODEX-E7 HTTP preflight support is available in your EvidenceOS deployment.
+- **OpenClaw guard:** The OpenClaw plugin requires the EvidenceOS HTTP preflight endpoint (`POST /v1/preflight_tool_call`); see [`integrations/openclaw-plugin/README.md`](integrations/openclaw-plugin/README.md).
+- **LangChain wrapper:** The LangChain/LangGraph wrapper remains smoke-test scope until a full production wrapper is implemented; see [`integrations/langchain-wrapper/README.md`](integrations/langchain-wrapper/README.md).
 
 ## Quickstart
 
@@ -15,7 +22,7 @@ Compatibility target is documented in [`COMPATIBILITY.md`](COMPATIBILITY.md).
 From a clean machine/clone, run EvidenceOS in a separate terminal:
 
 ```bash
-git clone https://github.com/evidenceos/evidenceos.git
+git clone https://github.com/jverdicc/EvidenceOS.git
 cd evidenceos
 cargo run -p evidenceos-daemon -- --listen 127.0.0.1:50051 --data-dir ./data
 ```
@@ -201,12 +208,12 @@ See:
 
 | Area | Status | Repro artifact / test | Governance reference |
 | --- | --- | --- | --- |
-| Exp11 sybil curve | Proven (deterministic simulation) | `artifacts/paper-suite/exp11.json`, `crates/discos-cli/tests/paper_suite_minimal.rs` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
-| Exp12 false-split curve | Proven (deterministic simulation) | `artifacts/paper-suite/exp12.json`, `crates/discos-core/tests/exp12_tests.rs` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
-| Canary drift | Simulated (seeded local canary model) | `artifacts/paper-suite/canary_drift.json`, `crates/discos-cli/src/artifacts.rs` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
-| MultiSignal TopicID escalation checks | Proven (DiscOS vectors) + simulated/probed (EvidenceOS reachability) | `artifacts/paper-suite/multisignal_topicid.json`, `crates/discos-cli/src/artifacts.rs` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
-| NullSpec calibration buckets | Proven (nonparametric bucket summary export) | `artifacts/calibration/<oracle_id>.json`, `discos-cli nullspec calibrate` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
-| Future policy controls | Roadmap | see `docs/ISSUE_BACKLOG.md` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
+| Exp11 sybil curve | Proven (deterministic simulation) | `artifacts/paper-suite/exp11.json`, `crates/discos-cli/tests/paper_suite_minimal.rs` | [EvidenceOS governance layers](https://github.com/jverdicc/EvidenceOS#governance) |
+| Exp12 false-split curve | Proven (deterministic simulation) | `artifacts/paper-suite/exp12.json`, `crates/discos-core/tests/exp12_tests.rs` | [EvidenceOS governance layers](https://github.com/jverdicc/EvidenceOS#governance) |
+| Canary drift | Simulated (seeded local canary model) | `artifacts/paper-suite/canary_drift.json`, `crates/discos-cli/src/artifacts.rs` | [EvidenceOS governance layers](https://github.com/jverdicc/EvidenceOS#governance) |
+| MultiSignal TopicID escalation checks | Proven (DiscOS vectors) + simulated/probed (EvidenceOS reachability) | `artifacts/paper-suite/multisignal_topicid.json`, `crates/discos-cli/src/artifacts.rs` | [EvidenceOS governance layers](https://github.com/jverdicc/EvidenceOS#governance) |
+| NullSpec calibration buckets | Proven (nonparametric bucket summary export) | `artifacts/calibration/<oracle_id>.json`, `discos-cli nullspec calibrate` | [EvidenceOS governance layers](https://github.com/jverdicc/EvidenceOS#governance) |
+| Future policy controls | Roadmap | see `docs/ISSUE_BACKLOG.md` | [EvidenceOS governance layers](https://github.com/jverdicc/EvidenceOS#governance) |
 
 ## Verification Matrix
 
