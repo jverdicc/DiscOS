@@ -196,6 +196,18 @@ See:
   - [`crates/discos-core/tests/structured_claims_prop.rs`](crates/discos-core/tests/structured_claims_prop.rs)
   - [`crates/discos-core/tests/structured_claims_end_to_end.rs`](crates/discos-core/tests/structured_claims_end_to_end.rs)
 
+
+## Evidence status matrix (paper-suite)
+
+| Area | Status | Repro artifact / test | Governance reference |
+| --- | --- | --- | --- |
+| Exp11 sybil curve | Proven (deterministic simulation) | `artifacts/paper-suite/exp11.json`, `crates/discos-cli/tests/paper_suite_minimal.rs` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
+| Exp12 false-split curve | Proven (deterministic simulation) | `artifacts/paper-suite/exp12.json`, `crates/discos-core/tests/exp12_tests.rs` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
+| Canary drift | Simulated (seeded local canary model) | `artifacts/paper-suite/canary_drift.json`, `crates/discos-cli/src/artifacts.rs` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
+| MultiSignal TopicID escalation checks | Proven (DiscOS vectors) + simulated/probed (EvidenceOS reachability) | `artifacts/paper-suite/multisignal_topicid.json`, `crates/discos-cli/src/artifacts.rs` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
+| NullSpec calibration buckets | Proven (nonparametric bucket summary export) | `artifacts/calibration/<oracle_id>.json`, `discos-cli nullspec calibrate` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
+| Future policy controls | Roadmap | see `docs/ISSUE_BACKLOG.md` | [EvidenceOS governance layers](https://github.com/EvidenceOS/EvidenceOS#governance) |
+
 ## Verification Matrix
 
 | Property | Mechanism | Evidence | Status |
@@ -214,6 +226,16 @@ Start from:
 - `crates/discos-core/src/experiments/` for simulation definitions
 - `tests/experiments_integration.rs` for deterministic assertions over exp0/1/2/11
 - `docs/TEST_EVIDENCE.md` for test evidence mapping
+
+
+### Paper artifacts commands
+
+```bash
+cargo run -p discos-cli -- nullspec calibrate --oracle-id default --endpoint http://127.0.0.1:50051 --runs 512 --out artifacts/calibration/default.json
+cargo run -p discos-cli -- paper-suite run --out artifacts/paper-suite --endpoint http://127.0.0.1:50051
+```
+
+Both commands emit machine-parseable JSON and deterministic artifact schemas.
 
 ## License
 
