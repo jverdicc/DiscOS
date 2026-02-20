@@ -25,10 +25,10 @@ pip install -r requirements.txt
 
 # Generate protobuf+gRPC stubs
 python -m grpc_tools.protoc \
-  -I../../proto \
+  -I/path/to/EvidenceOS/crates/evidenceos-protocol/proto \
   --python_out=. \
   --grpc_python_out=. \
-  ../../proto/evidenceos.proto
+  /path/to/EvidenceOS/crates/evidenceos-protocol/proto/evidenceos.proto
 
 python client.py --endpoint 127.0.0.1:50051
 ```

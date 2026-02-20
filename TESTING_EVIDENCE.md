@@ -42,10 +42,10 @@ cargo +nightly fuzz run fuzz_structured_claim_parse_canonicalize -- -max_total_t
 Run:
 
 ```bash
-./scripts/check_evidenceos_proto_sync.sh
+./scripts/check_proto_drift.sh
 ```
 
-This validates that the **entire** `crates/evidenceos-protocol/` directory matches the pinned EvidenceOS revision (`EVIDENCEOS_REV`).
+This validates that DiscOS does not vendor `evidenceos.*` protobuf definitions locally and therefore cannot drift from the shared upstream protocol crate.
 
 ## System test evidence
 
