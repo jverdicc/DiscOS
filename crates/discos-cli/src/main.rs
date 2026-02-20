@@ -588,9 +588,7 @@ async fn run_scenario_live(
 }
 
 fn expected_proto_hash() -> String {
-    hex_encode(&sha256(include_bytes!(
-        "../../evidenceos-protocol/proto/evidenceos.proto"
-    )))
+    hex_encode(&sha256(evidenceos_protocol::FILE_DESCRIPTOR_SET))
 }
 
 fn expected_evidenceos_rev() -> String {
