@@ -2,9 +2,22 @@
 
 # DiscOS (Rust)
 
+## What UVP is (in 2 minutes)
+
+UVP (Universal Verification Profile) is the operating model used by EvidenceOS + DiscOS to make adaptive evaluation auditable and bounded.
+DiscOS is the untrusted operator/client layer: it prepares deterministic claim artifacts, runs simulations, and drives lifecycle RPCs.
+EvidenceOS is the trusted verifier boundary: it enforces policy, quantizes outputs, tracks leakage budgets, and records evidence.
+Together they turn "many harmless-looking calls" into governed sequences with explicit state transitions (`allow`, `throttle`, `freeze`, `escalate`).
+The result is not "perfect safety"; it is measurable containment with artifacts (capsules + ETL proofs) that third parties can inspect.
+This repo is where contributors and integrators can run the client workflows, blackbox examples, and stress/testing harnesses for that model.
+
 ## 👉 Start here
 
-Start here: threat model walkthrough: [docs/threat_model_worked_example.md](docs/threat_model_worked_example.md).
+1. Threat model worked example: [docs/threat_model_worked_example.md](docs/threat_model_worked_example.md)
+2. UVP blackbox interface: [docs/uvp_blackbox_interface.md](docs/uvp_blackbox_interface.md)
+3. Exfiltration demo walkthrough: [examples/exfiltration_demo/](examples/exfiltration_demo/)
+
+Role-based guide: [docs/reader_map.md](docs/reader_map.md)
 
 New to the project? Begin with the reader guide: [docs/START_HERE.md](docs/START_HERE.md).
 
