@@ -31,6 +31,8 @@ use discos_client::{
     pb, verify_consistency, verify_inclusion, verify_sth_signature, ConsistencyProof, DiscosClient,
     InclusionProof, SignedTreeHead,
 };
+#[cfg(feature = "sim")]
+use discos_core::experiments::exp3::{run_exp3, Exp3Config};
 use discos_core::{
     structured_claims::{
         canonicalize_cbrn_claim, parse_cbrn_claim_json, validate_cbrn_claim, CbrnStructuredClaim,
@@ -94,6 +96,11 @@ enum Command {
         #[command(subcommand)]
         cmd: ScenarioCommand,
     },
+    #[cfg(feature = "sim")]
+    Sim {
+        #[command(subcommand)]
+        cmd: SimCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -127,6 +134,38 @@ enum ScenarioCommand {
         scenario_id: String,
         #[arg(long, default_value_t = false)]
         verify_etl: bool,
+    },
+}
+
+#[cfg(feature = "sim")]
+#[derive(Debug, Subcommand)]
+enum SimCommand {
+    Run {
+        #[command(subcommand)]
+        cmd: SimRunCommand,
+    },
+}
+
+#[cfg(feature = "sim")]
+#[derive(Debug, Subcommand)]
+enum SimRunCommand {
+    Exp3 {
+        #[arg(long, default_value_t = 42)]
+        seed: u64,
+        #[arg(long, default_value_t = 5000)]
+        n_trials: usize,
+        #[arg(long, default_value_t = 10.0)]
+        intensity: f64,
+        #[arg(long, default_value_t = 1.0)]
+        noise_sigma: f64,
+        #[arg(long, default_value_t = 0.05)]
+        residual_frac_dlc: f64,
+        #[arg(long, default_value_t = 0.003)]
+        residual_frac_pln: f64,
+        #[arg(long, default_value_t = 32)]
+        num_bins_mi: usize,
+        #[arg(long)]
+        out: PathBuf,
     },
 }
 
@@ -475,6 +514,60 @@ async fn main() -> anyhow::Result<()> {
                 )?;
                 println!("{}", result);
             }
+        },
+        #[cfg(feature = "sim")]
+        Command::Sim { cmd } => match cmd {
+            SimCommand::Run { cmd } => match cmd {
+                SimRunCommand::Exp3 {
+                    seed,
+                    n_trials,
+                    intensity,
+                    noise_sigma,
+                    residual_frac_dlc,
+                    residual_frac_pln,
+                    num_bins_mi,
+                    out,
+                } => {
+                    let cfg = Exp3Config {
+                        seed,
+                        n_trials,
+                        intensity,
+                        noise_sigma,
+                        residual_frac_dlc,
+                        residual_frac_pln,
+                        num_bins_mi,
+                    };
+
+                    let result = run_exp3(&cfg).await?;
+                    fs::create_dir_all(&out)?;
+                    let json_path = out.join("exp3_results.json");
+                    write_json_file(&json_path, &result)?;
+
+                    let md_path = out.join("exp3_results.md");
+                    let md = format!(
+                        "# Experiment 3 Results\n\n| Metric | Standard | DLC | PLN |\n|---|---:|---:|---:|\n| Accuracy | {:.6} | {:.6} | {:.6} |\n| MI (bits) | {:.6} | {:.6} | {:.6} |\n",
+                        result.acc_standard,
+                        result.acc_dlc,
+                        result.acc_pln,
+                        result.mi_standard_bits,
+                        result.mi_dlc_bits,
+                        result.mi_pln_bits
+                    );
+                    fs::write(&md_path, md)?;
+
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "ok": true,
+                            "experiment": "exp3",
+                            "out_dir": out,
+                            "result_json": json_path,
+                            "result_md": md_path,
+                            "result": result
+                        })
+                    );
+                }
+            },
         },
         Command::Claim { cmd } => match cmd {
             ClaimCommand::Create {
