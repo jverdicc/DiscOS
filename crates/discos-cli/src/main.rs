@@ -25,6 +25,7 @@ use discos_builder::{
     build_restricted_wasm, manifest_hash, sha256, AlphaHIRManifest, CausalDSLManifest,
     PhysHIRManifest,
 };
+use discos_cli::artifacts::{build_calibration_artifact, run_paper_suite, write_json_file};
 use discos_cli::capsule::build_capsule_print_summary;
 use discos_client::{
     pb, verify_consistency, verify_inclusion, verify_sth_signature, ConsistencyProof, DiscosClient,
@@ -75,6 +76,14 @@ struct Args {
 #[derive(Debug, Subcommand)]
 enum Command {
     Health,
+    Nullspec {
+        #[command(subcommand)]
+        cmd: NullspecCommand,
+    },
+    PaperSuite {
+        #[command(subcommand)]
+        cmd: PaperSuiteCommand,
+    },
     Claim {
         #[command(subcommand)]
         cmd: ClaimCommand,
@@ -84,6 +93,30 @@ enum Command {
     Scenario {
         #[command(subcommand)]
         cmd: ScenarioCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NullspecCommand {
+    Calibrate {
+        #[arg(long)]
+        oracle_id: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long)]
+        runs: usize,
+        #[arg(long)]
+        out: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum PaperSuiteCommand {
+    Run {
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        endpoint: Option<String>,
     },
 }
 
@@ -351,6 +384,44 @@ async fn main() -> anyhow::Result<()> {
             let health = client.health().await?;
             println!("{}", serde_json::json!({"status": health.status}));
         }
+        Command::Nullspec { cmd } => match cmd {
+            NullspecCommand::Calibrate {
+                oracle_id,
+                endpoint,
+                runs,
+                out,
+            } => {
+                validate_oracle_id(&oracle_id)?;
+                let endpoint = endpoint.unwrap_or(args.endpoint.clone());
+                let artifact = build_calibration_artifact(&oracle_id, &endpoint, runs)?;
+                write_json_file(&out, &artifact)?;
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "ok": true,
+                        "artifact": out,
+                        "schema_version": artifact.schema_version,
+                        "runs": artifact.runs,
+                        "bucket_count": artifact.bucket_count
+                    })
+                );
+            }
+        },
+        Command::PaperSuite { cmd } => match cmd {
+            PaperSuiteCommand::Run { out, endpoint } => {
+                let endpoint = endpoint.unwrap_or(args.endpoint.clone());
+                let index = run_paper_suite(&out, &endpoint).await?;
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "ok": true,
+                        "out_dir": out,
+                        "schema_version": index.schema_version,
+                        "index": index
+                    })
+                );
+            }
+        },
         Command::ServerInfo => {
             let mut client = DiscosClient::connect(&args.endpoint).await?;
             let info = client.get_server_info().await?;
