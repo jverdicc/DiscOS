@@ -204,9 +204,9 @@ If you want to see how a verifier behaves under probing (many interactions that 
 - Governance failures where operators override freezes/escalations without due process.
 - Downstream misuse after a compliant output leaves the governed interface.
 
-### ETL is a transparency log
+### ETL = Evidence Transparency Log
 
-ETL here means an append-only transparency log (ETL): a Merkle append-only log with inclusion/consistency proofs. Distributed-consensus chains are not required for this architecture.
+ETL here means the Evidence Transparency Log: an append-only Merkle transparency log with inclusion/consistency proofs and signed tree heads. A blockchain is not required for this architecture.
 
 ## Why Rust for the Userland Bridge?
 
