@@ -7,9 +7,10 @@ use prost::Message;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ClientPhase {
     Init,
+    Created,
     ArtifactsCommitted,
-    GatesFrozen,
-    SealedVault,
+    WasmCommitted,
+    Frozen,
     Executed,
 }
 
@@ -28,32 +29,32 @@ impl ClientStateMachine {
     }
 
     fn apply_commit_artifacts(&mut self, accepted: bool) -> bool {
-        if self.phase != ClientPhase::Init || !accepted {
+        if self.phase != ClientPhase::Created || !accepted {
             return false;
         }
         self.phase = ClientPhase::ArtifactsCommitted;
         true
     }
 
-    fn apply_freeze_gates(&mut self, frozen: bool) -> bool {
-        if self.phase != ClientPhase::ArtifactsCommitted || !frozen {
+    fn apply_commit_wasm(&mut self, accepted: bool) -> bool {
+        if self.phase != ClientPhase::ArtifactsCommitted || !accepted {
             return false;
         }
-        self.phase = ClientPhase::GatesFrozen;
+        self.phase = ClientPhase::WasmCommitted;
         true
     }
 
-    fn apply_seal_claim(&mut self, sealed: bool) -> bool {
-        if self.phase != ClientPhase::GatesFrozen || !sealed {
+    fn apply_freeze(&mut self, frozen: bool) -> bool {
+        if self.phase != ClientPhase::WasmCommitted || !frozen {
             return false;
         }
-        self.phase = ClientPhase::SealedVault;
+        self.phase = ClientPhase::Frozen;
         self.sealed_handshake_completed = true;
         true
     }
 
     fn apply_execute_claim(&mut self, certified: bool) -> bool {
-        if self.phase != ClientPhase::SealedVault || !certified {
+        if self.phase != ClientPhase::Frozen || !certified {
             return false;
         }
         self.phase = ClientPhase::Executed;
@@ -100,7 +101,13 @@ fuzz_target!(|data: &[u8]| {
     let chunks = split_input(data, 6);
     let mut sm = ClientStateMachine::new();
 
-    if let Some(resp) = decode_grpc_frame::<pb::CommitArtifactsResponse>(chunks[0]) {
+    if let Some(resp) = decode_grpc_frame::<pb::CreateClaimV2Response>(chunks[0]) {
+        if !resp.claim_id.is_empty() {
+            sm.phase = ClientPhase::Created;
+        }
+    }
+
+    if let Some(resp) = decode_grpc_frame::<pb::CommitArtifactsResponse>(chunks[1]) {
         let prev = sm.phase;
         let transitioned = sm.apply_commit_artifacts(resp.accepted);
         if !transitioned {
@@ -108,29 +115,29 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 
-    if let Some(resp) = decode_grpc_frame::<pb::FreezeGatesResponse>(chunks[1]) {
+    if let Some(resp) = decode_grpc_frame::<pb::CommitWasmResponse>(chunks[2]) {
         let prev = sm.phase;
-        let transitioned = sm.apply_freeze_gates(resp.frozen);
+        let transitioned = sm.apply_commit_wasm(resp.accepted);
+        if !transitioned {
+            assert_eq!(sm.phase, prev, "invalid commit wasm transition mutated state");
+        }
+    }
+
+    if let Some(resp) = decode_grpc_frame::<pb::FreezeResponse>(chunks[3]) {
+        let prev = sm.phase;
+        let transitioned = sm.apply_freeze(resp.frozen);
         if !transitioned {
             assert_eq!(sm.phase, prev, "invalid freeze transition mutated state");
         }
     }
 
-    if let Some(resp) = decode_grpc_frame::<pb::SealClaimResponse>(chunks[2]) {
-        let prev = sm.phase;
-        let transitioned = sm.apply_seal_claim(resp.sealed);
-        if !transitioned {
-            assert_eq!(sm.phase, prev, "invalid seal transition mutated state");
-        }
-    }
-
     // Fuzz malformed capsule responses through client-side verifier.
-    if let Some(resp) = decode_grpc_frame::<pb::FetchCapsuleResponse>(chunks[3]) {
+    if let Some(resp) = decode_grpc_frame::<pb::FetchCapsuleResponse>(chunks[4]) {
         let mut expected_claim = [0u8; 32];
         let mut expected_topic = [0u8; 32];
         let mut kernel_pubkey = [0u8; 32];
 
-        let seed = chunks[4];
+        let seed = chunks[5];
         for (i, b) in seed.iter().copied().enumerate() {
             expected_claim[i % 32] ^= b;
             expected_topic[(i * 7) % 32] ^= b.rotate_left((i % 8) as u32);
@@ -153,7 +160,7 @@ fuzz_target!(|data: &[u8]| {
         );
     }
 
-    if let Some(resp) = decode_grpc_frame::<pb::ExecuteClaimResponse>(chunks[4]) {
+    if let Some(resp) = decode_grpc_frame::<pb::ExecuteClaimV2Response>(chunks[5]) {
         let prev = sm.phase;
         let transitioned = sm.apply_execute_claim(resp.certified);
         if !transitioned {
