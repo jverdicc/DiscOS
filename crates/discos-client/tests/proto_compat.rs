@@ -23,12 +23,10 @@ fn generated_client_exposes_expected_service_methods() {
         mut client: pb::evidence_os_client::EvidenceOsClient<tonic::transport::Channel>,
     ) {
         std::mem::drop(client.health(pb::HealthRequest {}));
-        std::mem::drop(client.create_claim(pb::CreateClaimRequest::default()));
         std::mem::drop(client.create_claim_v2(pb::CreateClaimV2Request::default()));
         std::mem::drop(client.commit_artifacts(pb::CommitArtifactsRequest::default()));
-        std::mem::drop(client.freeze_gates(pb::FreezeGatesRequest::default()));
-        std::mem::drop(client.seal_claim(pb::SealClaimRequest::default()));
-        std::mem::drop(client.execute_claim(pb::ExecuteClaimRequest::default()));
+        std::mem::drop(client.commit_wasm(pb::CommitWasmRequest::default()));
+        std::mem::drop(client.freeze(pb::FreezeRequest::default()));
         std::mem::drop(client.execute_claim_v2(pb::ExecuteClaimV2Request::default()));
         std::mem::drop(client.fetch_capsule(pb::FetchCapsuleRequest::default()));
         std::mem::drop(client.get_signed_tree_head(pb::GetSignedTreeHeadRequest::default()));
@@ -60,20 +58,22 @@ fn descriptor_contains_required_v2_rpcs() {
     }
 
     let required = [
-        "evidenceos.v1.EvidenceOS.CreateClaimV2",
-        "evidenceos.v1.EvidenceOS.CommitArtifacts",
-        "evidenceos.v1.EvidenceOS.ExecuteClaimV2",
-        "evidenceos.v1.EvidenceOS.FetchCapsule",
-        "evidenceos.v1.EvidenceOS.GetSignedTreeHead",
-        "evidenceos.v1.EvidenceOS.WatchRevocations",
-        "evidenceos.v1.EvidenceOS.GetServerInfo",
+        "evidenceos.v2.EvidenceOS.CreateClaimV2",
+        "evidenceos.v2.EvidenceOS.CommitArtifacts",
+        "evidenceos.v2.EvidenceOS.CommitWasm",
+        "evidenceos.v2.EvidenceOS.Freeze",
+        "evidenceos.v2.EvidenceOS.ExecuteClaimV2",
+        "evidenceos.v2.EvidenceOS.FetchCapsule",
+        "evidenceos.v2.EvidenceOS.GetSignedTreeHead",
+        "evidenceos.v2.EvidenceOS.WatchRevocations",
+        "evidenceos.v2.EvidenceOS.GetServerInfo",
     ];
 
     for rpc in required {
         assert!(methods.contains(rpc), "missing required rpc {rpc}");
     }
 
-    let _has_get_public_key = methods.contains("evidenceos.v1.EvidenceOS.GetPublicKey");
+    let _has_get_public_key = methods.contains("evidenceos.v2.EvidenceOS.GetPublicKey");
 }
 
 #[test]
@@ -95,11 +95,9 @@ fn claim_id_fields_are_bytes_on_v2_surface() {
 
     let expected_bytes = Some(prost_types::field_descriptor_proto::Type::Bytes as i32);
     for message in [
-        "CreateClaimResponse",
         "CreateClaimV2Response",
         "CommitArtifactsRequest",
-        "FreezeGatesRequest",
-        "SealClaimRequest",
+        "FreezeRequest",
         "ExecuteClaimV2Request",
         "FetchCapsuleRequest",
         "RevokeClaimRequest",

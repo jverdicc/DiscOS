@@ -24,13 +24,6 @@ impl pb::evidence_os_server::EvidenceOs for OracleMockDaemon {
         }))
     }
 
-    async fn create_claim(
-        &self,
-        _: Request<pb::CreateClaimRequest>,
-    ) -> Result<Response<pb::CreateClaimResponse>, Status> {
-        Err(Status::unimplemented("v2 only"))
-    }
-
     async fn create_claim_v2(
         &self,
         req: Request<pb::CreateClaimV2Request>,
@@ -57,24 +50,17 @@ impl pb::evidence_os_server::EvidenceOs for OracleMockDaemon {
         Err(Status::unimplemented("not needed"))
     }
 
-    async fn freeze_gates(
+    async fn commit_wasm(
         &self,
-        _: Request<pb::FreezeGatesRequest>,
-    ) -> Result<Response<pb::FreezeGatesResponse>, Status> {
+        _: Request<pb::CommitWasmRequest>,
+    ) -> Result<Response<pb::CommitWasmResponse>, Status> {
         Err(Status::unimplemented("not needed"))
     }
 
-    async fn seal_claim(
+    async fn freeze(
         &self,
-        _: Request<pb::SealClaimRequest>,
-    ) -> Result<Response<pb::SealClaimResponse>, Status> {
-        Err(Status::unimplemented("not needed"))
-    }
-
-    async fn execute_claim(
-        &self,
-        _: Request<pb::ExecuteClaimRequest>,
-    ) -> Result<Response<pb::ExecuteClaimResponse>, Status> {
+        _: Request<pb::FreezeRequest>,
+    ) -> Result<Response<pb::FreezeResponse>, Status> {
         Err(Status::unimplemented("not needed"))
     }
 

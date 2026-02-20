@@ -47,7 +47,7 @@ use tracing_subscriber::EnvFilter;
 
 const CACHE_FILE_NAME: &str = "sth_cache.json";
 const DEFAULT_EVIDENCEOS_REV: &str = "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af";
-const EXPECTED_PROTOCOL_PACKAGE: &str = "evidenceos.v1";
+const EXPECTED_PROTOCOL_PACKAGE: &str = "evidenceos.v2";
 const DEFAULT_ORACLE_ID: &str = "default";
 const MAX_ORACLE_ID_LEN: usize = 128;
 
@@ -181,10 +181,6 @@ enum ClaimCommand {
         manifests: Vec<PathBuf>,
     },
     Freeze {
-        #[arg(long)]
-        claim_id: String,
-    },
-    Seal {
         #[arg(long)]
         claim_id: String,
     },
@@ -958,33 +954,33 @@ async fn main() -> anyhow::Result<()> {
                     })
                     .collect::<anyhow::Result<Vec<_>>>()?;
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
-                let resp = client
+                let claim_id_bytes = hex_decode_bytes(&claim_id)?;
+                let artifacts = client
                     .commit_artifacts(pb::CommitArtifactsRequest {
-                        claim_id: hex_decode_bytes(&claim_id)?,
-                        wasm_hash: wasm_hash_for_bytes(&wasm_bytes).to_vec(),
-                        wasm_module: wasm_bytes,
+                        claim_id: claim_id_bytes.clone(),
                         manifests: artifact_manifests,
                     })
                     .await?;
-                println!("{}", serde_json::json!({"accepted": resp.accepted}));
+                let wasm = client
+                    .commit_wasm(pb::CommitWasmRequest {
+                        claim_id: claim_id_bytes,
+                        wasm_hash: wasm_hash_for_bytes(&wasm_bytes).to_vec(),
+                        wasm_module: wasm_bytes,
+                    })
+                    .await?;
+                println!(
+                    "{}",
+                    serde_json::json!({"artifacts_accepted": artifacts.accepted, "wasm_accepted": wasm.accepted})
+                );
             }
             ClaimCommand::Freeze { claim_id } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
                 let resp = client
-                    .freeze_gates(pb::FreezeGatesRequest {
+                    .freeze(pb::FreezeRequest {
                         claim_id: hex_decode_bytes(&claim_id)?,
                     })
                     .await?;
                 println!("{}", serde_json::json!({"frozen": resp.frozen}));
-            }
-            ClaimCommand::Seal { claim_id } => {
-                let mut client = DiscosClient::connect(&args.endpoint).await?;
-                let resp = client
-                    .seal_claim(pb::SealClaimRequest {
-                        claim_id: hex_decode_bytes(&claim_id)?,
-                    })
-                    .await?;
-                println!("{}", serde_json::json!({"sealed": resp.sealed}));
             }
             ClaimCommand::Execute { claim_id } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;

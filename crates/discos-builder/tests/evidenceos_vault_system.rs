@@ -64,8 +64,6 @@ async fn builder_generated_wasm_commits_executes_and_fetches_capsule() -> anyhow
     client
         .commit_artifacts(pb::CommitArtifactsRequest {
             claim_id: create.claim_id.clone(),
-            wasm_hash: wasm.code_hash.to_vec(),
-            wasm_module: wasm.wasm_bytes,
             manifests: vec![
                 manifest_entry("alpha_hir.json", serde_json::to_vec(&alpha)?),
                 manifest_entry("phys_hir.json", serde_json::to_vec(&phys)?),
@@ -75,17 +73,20 @@ async fn builder_generated_wasm_commits_executes_and_fetches_capsule() -> anyhow
         .await?;
 
     client
-        .freeze_gates(pb::FreezeGatesRequest {
+        .commit_wasm(pb::CommitWasmRequest {
+            claim_id: create.claim_id.clone(),
+            wasm_hash: wasm.code_hash.to_vec(),
+            wasm_module: wasm.wasm_bytes,
+        })
+        .await?;
+
+    client
+        .freeze(pb::FreezeRequest {
             claim_id: create.claim_id.clone(),
         })
         .await?;
     client
         .execute_claim_v2(pb::ExecuteClaimV2Request {
-            claim_id: create.claim_id.clone(),
-        })
-        .await?;
-    client
-        .seal_claim(pb::SealClaimRequest {
             claim_id: create.claim_id.clone(),
         })
         .await?;
