@@ -7,6 +7,7 @@ mkdir -p "$ARTIFACT_DIR"
 
 cargo fmt --all -- --check | tee "$ARTIFACT_DIR/discos_fmt_output.txt"
 cargo clippy --workspace --all-targets --all-features -- -D warnings | tee "$ARTIFACT_DIR/clippy-report.txt"
+./scripts/check_implementation_honesty.sh | tee "$ARTIFACT_DIR/implementation_honesty_gate.txt"
 cargo test --workspace --all-targets --all-features | tee "$ARTIFACT_DIR/test_output.txt"
 
 cargo llvm-cov --workspace --all-features --lcov --output-path "$ARTIFACT_DIR/coverage.lcov" --fail-under-lines "$COVERAGE_THRESHOLD_LINES" \
@@ -28,6 +29,7 @@ cargo llvm-cov --workspace --all-features --lcov --output-path "$ARTIFACT_DIR/co
 required_artifacts=(
   "$ARTIFACT_DIR/discos_fmt_output.txt"
   "$ARTIFACT_DIR/clippy-report.txt"
+  "$ARTIFACT_DIR/implementation_honesty_gate.txt"
   "$ARTIFACT_DIR/test_output.txt"
   "$ARTIFACT_DIR/coverage.lcov"
   "$ARTIFACT_DIR/fuzz_structured_claims_json.txt"
