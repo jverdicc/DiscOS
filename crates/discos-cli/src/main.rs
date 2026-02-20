@@ -40,6 +40,7 @@ use discos_core::{
     topicid::{canonicalize_output_schema_id, compute_topic_id, ClaimMetadata, TopicSignals},
 };
 use tokio_stream::StreamExt;
+use tonic::Code;
 use tracing_subscriber::EnvFilter;
 
 const CACHE_FILE_NAME: &str = "sth_cache.json";
@@ -125,6 +126,10 @@ enum ScenarioCommand {
     List,
     Run {
         scenario_id: String,
+        #[arg(long, default_value_t = false)]
+        verify_etl: bool,
+    },
+    RunSuite {
         #[arg(long, default_value_t = false)]
         verify_etl: bool,
     },
@@ -307,6 +312,266 @@ struct ScenarioSpec {
     description: String,
     scenario_type: String,
     claim_name: Option<String>,
+    #[serde(default)]
+    expected_response: Option<String>,
+    #[serde(default)]
+    seed: Option<u64>,
+    #[serde(default)]
+    session_id: Option<String>,
+    #[serde(default)]
+    topic: Option<String>,
+    #[serde(default)]
+    steps: Vec<ScenarioStep>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct ScenarioStep {
+    tool_name: String,
+    objective: String,
+    #[serde(default)]
+    params: serde_json::Value,
+    #[serde(default = "default_repeat_count")]
+    repeats: usize,
+    #[serde(default)]
+    agent_id: Option<String>,
+}
+
+fn default_repeat_count() -> usize {
+    1
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct ScenarioExchange {
+    step_index: usize,
+    repeat_index: usize,
+    tool_name: String,
+    objective: String,
+    params: serde_json::Value,
+    session_id: String,
+    topic: String,
+    agent_id: String,
+    claim_id_hex: Option<String>,
+    response_state: String,
+    grpc_code: String,
+    daemon_message: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct ScenarioRun {
+    scenario_id: String,
+    description: String,
+    scenario_type: String,
+    endpoint: String,
+    expected_response: String,
+    final_state: String,
+    verify_etl: bool,
+    deterministic_fingerprint: String,
+    exchanges: Vec<ScenarioExchange>,
+}
+
+fn classify_from_status(code: Code, message: &str) -> String {
+    let uppercase = message.to_ascii_uppercase();
+    if code == Code::FailedPrecondition
+        || uppercase.contains("ESCALATE")
+        || uppercase.contains("FROZEN")
+    {
+        return "REQUIRE_HUMAN".to_string();
+    }
+    if code == Code::ResourceExhausted || uppercase.contains("THROTTLE") {
+        return "DOWNGRADE".to_string();
+    }
+    if code == Code::PermissionDenied
+        || code == Code::Unauthenticated
+        || code == Code::InvalidArgument
+    {
+        return "DENY".to_string();
+    }
+    "ALLOW".to_string()
+}
+
+fn scenario_seed(spec: &ScenarioSpec) -> u64 {
+    spec.seed.unwrap_or_else(|| {
+        let digest = sha256(spec.id.as_bytes());
+        u64::from_le_bytes(digest[0..8].try_into().unwrap_or([0u8; 8]))
+    })
+}
+
+fn scenario_session_id(spec: &ScenarioSpec) -> String {
+    spec.session_id
+        .clone()
+        .unwrap_or_else(|| format!("session-{}", scenario_seed(spec)))
+}
+
+fn scenario_topic(spec: &ScenarioSpec) -> String {
+    spec.topic
+        .clone()
+        .unwrap_or_else(|| format!("topic-{}", spec.id))
+}
+
+fn scenario_expected_response(spec: &ScenarioSpec) -> String {
+    spec.expected_response
+        .clone()
+        .unwrap_or_else(|| "ALLOW".to_string())
+}
+
+fn response_rank(state: &str) -> usize {
+    match state {
+        "ALLOW" => 0,
+        "DOWNGRADE" => 1,
+        "REQUIRE_HUMAN" => 2,
+        _ => 3,
+    }
+}
+
+fn scenario_markdown(run: &ScenarioRun) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("# Scenario: {}\n\n", run.scenario_id));
+    out.push_str(&format!("{}\n\n", run.description));
+    out.push_str("| Step | Tool | Agent | Session | Topic | State | gRPC Code | Message |\n");
+    out.push_str("| --- | --- | --- | --- | --- | --- | --- | --- |\n");
+    for row in &run.exchanges {
+        out.push_str(&format!(
+            "| {}.{} | {} | {} | {} | {} | {} | {} | {} |\n",
+            row.step_index,
+            row.repeat_index,
+            row.tool_name,
+            row.agent_id,
+            row.session_id,
+            row.topic,
+            row.response_state,
+            row.grpc_code,
+            row.daemon_message.replace('|', "\\|")
+        ));
+    }
+    out.push_str(&format!(
+        "\nFinal state: `{}` (expected `{}`)\\\n\nDeterminism fingerprint: `{}`\n",
+        run.final_state, run.expected_response, run.deterministic_fingerprint
+    ));
+    out
+}
+
+async fn run_scenario_live(
+    endpoint: &str,
+    spec: &ScenarioSpec,
+    verify_etl: bool,
+) -> anyhow::Result<ScenarioRun> {
+    let mut client =
+        pb::evidence_os_client::EvidenceOsClient::connect(endpoint.to_string()).await?;
+    let mut exchanges = Vec::new();
+    let session_id = scenario_session_id(spec);
+    let topic = scenario_topic(spec);
+    let seed = scenario_seed(spec);
+
+    let mut final_state = "ALLOW".to_string();
+
+    for (step_idx, step) in spec.steps.iter().enumerate() {
+        for repeat_idx in 0..step.repeats {
+            let agent_id = step
+                .agent_id
+                .clone()
+                .unwrap_or_else(|| format!("agent-{seed}-{}", step_idx));
+            let claim_name = format!(
+                "{}-s{}-r{}-{}",
+                spec.id,
+                step_idx,
+                repeat_idx,
+                step.tool_name.replace(' ', "-")
+            );
+            let semantic_hash = sha256(format!("{topic}|{}", step.objective).as_bytes()).to_vec();
+            let create_req = pb::CreateClaimV2Request {
+                claim_name,
+                metadata: Some(pb::ClaimMetadataV2 {
+                    lane: "cbrn".to_string(),
+                    alpha_micros: 50_000,
+                    epoch_config_ref: format!("epoch/{session_id}"),
+                    output_schema_id: "cbrn-sc.v1".to_string(),
+                }),
+                signals: Some(pb::TopicSignalsV2 {
+                    semantic_hash,
+                    phys_hir_signature_hash: vec![3; 32],
+                    dependency_merkle_root: vec![7; 32],
+                }),
+                holdout_ref: "holdout/default".to_string(),
+                epoch_size: 1024,
+                oracle_num_symbols: 1024,
+                access_credit: 100_000,
+                oracle_id: "default".to_string(),
+            };
+
+            let mut create_rpc = tonic::Request::new(create_req);
+            create_rpc.metadata_mut().insert(
+                "x-agent-id",
+                agent_id
+                    .parse()
+                    .context("x-agent-id metadata must be ASCII")?,
+            );
+            create_rpc.metadata_mut().insert(
+                "x-session-id",
+                session_id
+                    .parse()
+                    .context("x-session-id metadata must be ASCII")?,
+            );
+            create_rpc.metadata_mut().insert(
+                "x-tool-name",
+                step.tool_name
+                    .parse()
+                    .context("x-tool-name metadata must be ASCII")?,
+            );
+
+            let create_resp = client.create_claim_v2(create_rpc).await?.into_inner();
+            let claim_id = create_resp.claim_id;
+
+            let execute_req = pb::ExecuteClaimV2Request {
+                claim_id: claim_id.clone(),
+            };
+            let execute = client.execute_claim_v2(execute_req).await;
+
+            let (state, grpc_code, daemon_message) = match execute {
+                Ok(_) => (
+                    "ALLOW".to_string(),
+                    Code::Ok.to_string(),
+                    "ALLOW".to_string(),
+                ),
+                Err(status) => (
+                    classify_from_status(status.code(), status.message()),
+                    status.code().to_string(),
+                    status.message().to_string(),
+                ),
+            };
+
+            if response_rank(&state) > response_rank(&final_state) {
+                final_state = state.clone();
+            }
+
+            exchanges.push(ScenarioExchange {
+                step_index: step_idx,
+                repeat_index: repeat_idx,
+                tool_name: step.tool_name.clone(),
+                objective: step.objective.clone(),
+                params: step.params.clone(),
+                session_id: session_id.clone(),
+                topic: topic.clone(),
+                agent_id,
+                claim_id_hex: Some(hex_encode(&claim_id)),
+                response_state: state,
+                grpc_code,
+                daemon_message,
+            });
+        }
+    }
+
+    let fingerprint = hex_encode(&sha256(&serde_json::to_vec(&exchanges)?));
+    Ok(ScenarioRun {
+        scenario_id: spec.id.clone(),
+        description: spec.description.clone(),
+        scenario_type: spec.scenario_type.clone(),
+        endpoint: endpoint.to_string(),
+        expected_response: scenario_expected_response(spec),
+        final_state,
+        verify_etl,
+        deterministic_fingerprint: fingerprint,
+        exchanges,
+    })
 }
 
 fn expected_proto_hash() -> String {
@@ -461,19 +726,34 @@ async fn main() -> anyhow::Result<()> {
                     .clone();
                 let artifact_dir = PathBuf::from("artifacts/scenarios").join(&spec.id);
                 fs::create_dir_all(&artifact_dir)?;
-                let result = serde_json::json!({
-                    "scenario_id": spec.id,
-                    "description": spec.description,
-                    "scenario_type": spec.scenario_type,
-                    "verify_etl": verify_etl,
-                    "artifact_dir": artifact_dir,
-                    "status": "pass"
-                });
+                let run = run_scenario_live(&args.endpoint, &spec, verify_etl).await?;
+                let result = serde_json::to_value(&run)?;
                 fs::write(
-                    artifact_dir.join("result.json"),
+                    artifact_dir.join("run.json"),
                     serde_json::to_vec_pretty(&result)?,
                 )?;
+                fs::write(artifact_dir.join("run.md"), scenario_markdown(&run))?;
                 println!("{}", result);
+            }
+            ScenarioCommand::RunSuite { verify_etl } => {
+                let specs = load_scenarios(Path::new("docs/scenarios"))?;
+                anyhow::ensure!(!specs.is_empty(), "no scenarios found in docs/scenarios");
+                let mut runs = Vec::with_capacity(specs.len());
+                for spec in specs {
+                    let artifact_dir = PathBuf::from("artifacts/scenarios").join(&spec.id);
+                    fs::create_dir_all(&artifact_dir)?;
+                    let run = run_scenario_live(&args.endpoint, &spec, verify_etl).await?;
+                    fs::write(
+                        artifact_dir.join("run.json"),
+                        serde_json::to_vec_pretty(&run)?,
+                    )?;
+                    fs::write(artifact_dir.join("run.md"), scenario_markdown(&run))?;
+                    runs.push(run);
+                }
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({"runs": runs}))?
+                );
             }
         },
         Command::Claim { cmd } => match cmd {
