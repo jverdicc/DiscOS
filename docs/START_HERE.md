@@ -6,10 +6,11 @@ EvidenceOS + DiscOS provide a split architecture where EvidenceOS is the trusted
 
 Read in this order:
 
-1. [THREAT_MODEL_BLACKBOX.md](THREAT_MODEL_BLACKBOX.md)
-2. [Alignment positioning: UVP vs capability spillover](ALIGNMENT_SPILLOVER_POSITIONING.md)
-3. [Paper overview (Sections 3, 5, and 10)](https://doi.org/10.5281/zenodo.18692345)
-4. [Experiments summary in README (Evidence status matrix + paper-suite)](../README.md#evidence-status-matrix-paper-suite)
+1. [UVP black-box API (inputs/outputs only)](uvp_blackbox_interface.md)
+2. [THREAT_MODEL_BLACKBOX.md](THREAT_MODEL_BLACKBOX.md)
+3. [Alignment positioning: UVP vs capability spillover](ALIGNMENT_SPILLOVER_POSITIONING.md)
+4. [Paper overview (Sections 3, 5, and 10)](https://doi.org/10.5281/zenodo.18692345)
+5. [Experiments summary in README (Evidence status matrix + paper-suite)](../README.md#evidence-status-matrix-paper-suite)
 
 ## If you're a systems/security engineer
 
