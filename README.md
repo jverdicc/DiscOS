@@ -144,6 +144,64 @@ DiscOS is the operator-facing client and experimentation layer. It is untrusted 
 
 If you want to see how a verifier behaves under probing (many interactions that adapt over time), DiscOS is the harness: it can run stress-test simulations, generate structured claims, and exercise system tests that produce artifacts you can publish.
 
+## Threat Model by Example (blackbox walkthrough)
+
+### Baseline failure (oracle-only loop; conceptual)
+
+1. Imagine an adaptive agent that can repeatedly query an evaluation oracle tied to hidden holdout data.
+2. The agent submits many slightly different claim/code variants and observes the oracle's responses over time.
+3. In a baseline design, each response is judged in isolation and may appear harmless on its own.
+4. But the sequence matters: small response differences can be combined across rounds.
+5. Over enough rounds, the agent can infer patterns about the hidden holdout set.
+6. This is the core "adaptive probing" failure mode.
+7. Conceptually, this matches the paper's Experiment 0 takeaway: oracle-only baselines collapse under iterative probing pressure.
+8. The problem is not one dramatic leak in a single answer.
+9. The problem is cumulative leakage from many low-signal answers.
+10. A baseline that lacks cross-round accounting cannot tell when harmless-looking interactions become harmful as a whole.
+11. The result is a brittle system that slowly reveals protected evaluation structure.
+12. We intentionally keep this high level: no exploit recipe, no operational attack steps.
+
+### EvidenceOS success path (same scenario, defended)
+
+1. EvidenceOS treats each claim interaction as part of a governed sequence, not a one-off event.
+2. Inputs are canonicalized first so semantically equivalent requests normalize to stable forms.
+3. Oracle-facing outputs are quantized to a finite alphabet, reducing high-resolution side channels.
+4. Hysteresis dampens oscillation tricks that rely on tiny round-to-round perturbations.
+5. Because outputs come from a bounded symbol set, EvidenceOS can charge explicit leakage `k` per interaction.
+6. Leakage budgets are composed jointly when multiple oracles share the same holdout boundary.
+7. This prevents "split probing" where an attacker distributes pressure across tools to bypass per-tool limits.
+8. As budgets deplete or invariants fail, lanes are frozen and/or escalated for stricter handling.
+9. The system can stall progress safely rather than issuing progressively more revealing answers.
+10. Result: adaptive probing transitions from "eventual extraction" to "bounded, auditable failure modes."
+11. Operators receive stable outputs and evidence artifacts describing what was accepted, throttled, or frozen.
+12. Defense is policy + accounting + state transitions, not secrecy-by-obscurity.
+
+### Blackbox I/O (worked example)
+
+| Stage | Input (type-level, no code required) | Output (type-level, blackbox observable) |
+| --- | --- | --- |
+| `CreateClaim` | Claim statement, referenced code artifact hash, lane, holdout reference, oracle id | Claim id, normalized topic id, initial budget context |
+| `Freeze` | Claim id + committed manifests | Frozen lifecycle state or policy rejection reason |
+| `Execute` | Frozen claim id + oracle call envelope(s) | Quantized oracle reply symbol(s), leakage debit `k`, updated state (`allow` / `throttle` / `escalate`) |
+| `Capsule / ETL` | Executed claim id | Signed claim capsule, ETL index, inclusion/consistency verification material |
+
+### What this is NOT
+
+- Not a recipe for exploiting evaluation systems; this walkthrough is defensive and conceptual.
+- Not dependent on Rust expertise, Merkle-tree internals, gRPC details, or blockchain literacy.
+- Not a guarantee that any model is "safe"; it is a control system for bounding and auditing leakage.
+
+### Threats out of scope
+
+- Compromise of trusted compute, signing keys, or host integrity.
+- Physical, organizational, or insider attacks outside protocol controls.
+- Governance failures where operators override freezes/escalations without due process.
+- Downstream misuse after a compliant output leaves the governed interface.
+
+### Not a blockchain
+
+ETL here means an append-only transparency log with inclusion and consistency proofs. Blockchain consensus is not required for this architecture.
+
 ## Why Rust for the Userland Bridge?
 
 Most AI agent ecosystems are Python-first, and DiscOS embraces that at the orchestration layer. But the bridge that sits between adversarial workloads and verifier RPC boundaries is implemented in Rust on purpose.
