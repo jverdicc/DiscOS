@@ -89,7 +89,7 @@ When response latency tracks secret-dependent branches, a client may infer hidde
 
 ## Glossary bridge (quick translation)
 
-> **`leakage k`** = transcript support budget (how much distinguishable signal interaction can carry), **not** a blockchain token.
+> **`leakage k`** = transcript support budget (how much distinguishable signal interaction can carry), **not** a cryptocurrency token.
 >
 > **`ETL`** = append-only transparency log for auditability and verification, **not** cryptocurrency.
 

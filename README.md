@@ -192,7 +192,7 @@ If you want to see how a verifier behaves under probing (many interactions that 
 ### What this is NOT
 
 - Not a recipe for exploiting evaluation systems; this walkthrough is defensive and conceptual.
-- Not dependent on Rust expertise, Merkle-tree internals, gRPC details, or blockchain literacy.
+- Not dependent on Rust expertise, Merkle-tree internals, gRPC details, or cryptocurrency consensus literacy.
 - Not a guarantee that any model is "safe"; it is a control system for bounding and auditing leakage.
 
 ### Threats out of scope
@@ -202,9 +202,9 @@ If you want to see how a verifier behaves under probing (many interactions that 
 - Governance failures where operators override freezes/escalations without due process.
 - Downstream misuse after a compliant output leaves the governed interface.
 
-### Not a blockchain
+### ETL is a transparency log
 
-ETL here means an append-only transparency log with inclusion and consistency proofs. Blockchain consensus is not required for this architecture.
+ETL here means an append-only transparency log (ETL): a Merkle append-only log with inclusion/consistency proofs. Distributed-consensus chains are not required for this architecture.
 
 ## Why Rust for the Userland Bridge?
 
