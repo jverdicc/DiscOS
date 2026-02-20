@@ -17,6 +17,7 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+pub mod crypto_transcripts;
 pub mod etl;
 pub mod ledger;
 pub mod topicid;

@@ -18,7 +18,7 @@
 )]
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use evidenceos_protocol::domains;
+use evidenceos_core::crypto_transcripts;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -351,10 +351,7 @@ pub fn sha256_domain(domain: &[u8], payload: &[u8]) -> [u8; 32] {
 }
 
 pub fn merkle_leaf_hash(payload: &[u8]) -> [u8; 32] {
-    let mut material = Vec::with_capacity(payload.len() + 1);
-    material.push(0x00);
-    material.extend_from_slice(payload);
-    sha256(&material)
+    crypto_transcripts::etl_leaf_hash(payload)
 }
 
 fn merkle_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
@@ -466,7 +463,7 @@ pub fn verify_capsule_response(
         expected_topic_id,
     )?;
 
-    let capsule_hash = sha256_domain(domains::CAPSULE_HASH_V1, &response.capsule);
+    let capsule_hash = crypto_transcripts::etl_leaf_hash(&response.capsule);
 
     let inclusion = response
         .inclusion
@@ -554,29 +551,19 @@ pub fn verify_consistency(
 }
 
 pub fn verify_sth_signature(sth: &SignedTreeHead, kernel_pubkey: &[u8]) -> Result<(), ClientError> {
-    if kernel_pubkey.len() != 32 {
-        return Err(ClientError::InvalidInput(
-            "ed25519 pubkey must be 32 bytes".into(),
-        ));
-    }
-
-    let pubkey = VerifyingKey::from_bytes(
-        kernel_pubkey
-            .try_into()
-            .map_err(|_| ClientError::InvalidInput("ed25519 pubkey must be 32 bytes".into()))?,
-    )
-    .map_err(|e| ClientError::InvalidInput(format!("invalid ed25519 pubkey: {e}")))?;
-
-    let signature = Signature::from_bytes(&sth.signature);
-
-    let mut sign_payload = Vec::with_capacity(40);
-    sign_payload.extend_from_slice(&sth.tree_size.to_be_bytes());
-    sign_payload.extend_from_slice(&sth.root_hash);
-    let sign_bytes = sha256_domain(domains::STH_SIGNATURE_V1, &sign_payload);
-
-    pubkey
-        .verify(&sign_bytes, &signature)
-        .map_err(|_| ClientError::VerificationFailed("invalid STH signature".into()))
+    let core_sth = crypto_transcripts::SignedTreeHead {
+        tree_size: sth.tree_size,
+        root_hash: sth.root_hash,
+        signature: sth.signature,
+    };
+    crypto_transcripts::verify_sth_signature(&core_sth, kernel_pubkey).map_err(|e| match e {
+        crypto_transcripts::CryptoTranscriptError::InvalidInput(msg) => {
+            ClientError::InvalidInput(msg)
+        }
+        crypto_transcripts::CryptoTranscriptError::VerificationFailed(msg) => {
+            ClientError::VerificationFailed(msg)
+        }
+    })
 }
 
 pub fn verify_revocation_signature(
@@ -598,13 +585,13 @@ pub fn verify_revocation_signature(
 
     let signature = Signature::from_bytes(&revocation.signature);
 
-    let mut sign_payload = Vec::new();
-    sign_payload.extend_from_slice(&(revocation.claim_id.len() as u32).to_be_bytes());
-    sign_payload.extend_from_slice(&revocation.claim_id);
-    sign_payload.extend_from_slice(&(revocation.reason_code.len() as u32).to_be_bytes());
-    sign_payload.extend_from_slice(revocation.reason_code.as_bytes());
-    sign_payload.extend_from_slice(&revocation.logical_epoch.to_be_bytes());
-    let sign_bytes = sha256_domain(domains::REVOCATION_FEED_V1, &sign_payload);
+    let entry = crypto_transcripts::RevocationEntry {
+        claim_id: revocation.claim_id.clone(),
+        reason_code: revocation.reason_code.clone(),
+        logical_epoch: revocation.logical_epoch,
+        signature: revocation.signature,
+    };
+    let sign_bytes = crypto_transcripts::revocation_entry_digest(&entry);
 
     pubkey
         .verify(&sign_bytes, &signature)
@@ -730,10 +717,7 @@ mod tests {
     #[test]
     fn sth_signature_roundtrip_and_bit_flips() {
         let sk = SigningKey::from_bytes(&[7u8; 32]);
-        let mut signed_payload = Vec::new();
-        signed_payload.extend_from_slice(&7u64.to_be_bytes());
-        signed_payload.extend_from_slice(&[4u8; 32]);
-        let signed_bytes = sha256_domain(domains::STH_SIGNATURE_V1, &signed_payload);
+        let signed_bytes = crypto_transcripts::sth_signature_digest(7, [4u8; 32]);
         let sig = sk.sign(&signed_bytes);
 
         let sth = SignedTreeHead {
@@ -853,13 +837,13 @@ mod tests {
     #[test]
     fn revocation_signature_roundtrip_and_tamper() {
         let sk = SigningKey::from_bytes(&[9u8; 32]);
-        let mut sign_payload = Vec::new();
-        sign_payload.extend_from_slice(&5u32.to_be_bytes());
-        sign_payload.extend_from_slice(b"claim");
-        sign_payload.extend_from_slice(&7u32.to_be_bytes());
-        sign_payload.extend_from_slice(b"expired");
-        sign_payload.extend_from_slice(&11u64.to_be_bytes());
-        let sign_bytes = sha256_domain(domains::REVOCATION_FEED_V1, &sign_payload);
+        let sign_bytes =
+            crypto_transcripts::revocation_entry_digest(&crypto_transcripts::RevocationEntry {
+                claim_id: b"claim".to_vec(),
+                reason_code: "expired".to_string(),
+                logical_epoch: 11,
+                signature: [0u8; 64],
+            });
         let sig = sk.sign(&sign_bytes);
 
         let rev = SignedRevocation {

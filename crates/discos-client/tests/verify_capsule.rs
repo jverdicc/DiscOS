@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use discos_client::{
-    canonical_output_matches_capsule, merkle_leaf_hash, sha256, sha256_domain, verify_inclusion,
+    canonical_output_matches_capsule, merkle_leaf_hash, sha256, verify_inclusion,
     verify_sth_signature, InclusionProof, SignedTreeHead,
 };
 use ed25519_dalek::{Signer, SigningKey};
-use evidenceos_protocol::domains;
+use evidenceos_core::crypto_transcripts;
 
 fn ref_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
     let mut bytes = Vec::with_capacity(65);
@@ -101,10 +101,7 @@ fn tampered_audit_node_fails_inclusion() {
 #[test]
 fn tampered_signature_fails_sth_verification() {
     let sk = SigningKey::from_bytes(&[3u8; 32]);
-    let mut payload = Vec::new();
-    payload.extend_from_slice(&5u64.to_be_bytes());
-    payload.extend_from_slice(&[8u8; 32]);
-    let digest = sha256_domain(domains::STH_SIGNATURE_V1, &payload);
+    let digest = crypto_transcripts::sth_signature_digest(5, [8u8; 32]);
     let sig = sk.sign(&digest);
 
     let mut sth = SignedTreeHead {

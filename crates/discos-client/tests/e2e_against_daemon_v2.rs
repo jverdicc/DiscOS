@@ -15,10 +15,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use discos_client::{
-    pb, sha256_domain, verify_consistency, verify_inclusion, verify_sth_signature,
-    ConsistencyProof, DiscosClient, InclusionProof, SignedTreeHead,
+    pb, verify_consistency, verify_inclusion, verify_sth_signature, ConsistencyProof, DiscosClient,
+    InclusionProof, SignedTreeHead,
 };
 use ed25519_dalek::{Signer, SigningKey};
+use evidenceos_core::crypto_transcripts;
 use sha2::Digest;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -112,18 +113,12 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
             "structured_output_hash_hex": hex::encode(sha2::Sha256::digest(b"{}")),
         }))
         .map_err(|e| Status::internal(e.to_string()))?;
-        let leaf = [3u8; 32];
+        let leaf = crypto_transcripts::etl_leaf_hash(&capsule);
         let mut st = self.0.lock().await;
         st.root = leaf;
-        let mut p = Vec::new();
-        p.extend_from_slice(&1u64.to_be_bytes());
-        p.extend_from_slice(&st.root);
         st.sig = st
             .signing_key
-            .sign(&sha256_domain(
-                evidenceos_protocol::domains::STH_SIGNATURE_V1,
-                &p,
-            ))
+            .sign(&crypto_transcripts::sth_signature_digest(1, st.root))
             .to_bytes();
         Ok(Response::new(pb::FetchCapsuleResponse {
             claim_id,
