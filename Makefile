@@ -1,4 +1,4 @@
-.PHONY: fmt lint test coverage-core coverage-client check-coverage-threshold-drift test-evidence
+.PHONY: fmt lint test coverage-core coverage-client check-coverage-threshold-drift test-evidence demo-exfil-baseline demo-exfil-evidenceos-mock
 
 fmt:
 	cargo fmt --all --check
@@ -20,3 +20,9 @@ check-coverage-threshold-drift:
 
 test-evidence: check-coverage-threshold-drift
 	./scripts/test_evidence.sh
+
+demo-exfil-baseline:
+	python3 examples/exfiltration_demo/attack_bitflip.py --mode baseline --n 64 --seed 7
+
+demo-exfil-evidenceos-mock:
+	python3 examples/exfiltration_demo/attack_bitflip.py --mode evidenceos-mock --n 64 --seed 7 --quant-step 0.05 --hysteresis 0.03 --budget 48
