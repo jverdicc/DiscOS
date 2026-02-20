@@ -239,6 +239,7 @@ Finally, DiscOS is intentionally explicit about what it does not solve. It reduc
 - **Client code:** `crates/discos-client/` (typed gRPC client), `crates/discos-cli/` (operator CLI).
 - **Experiments/simulations:** `crates/discos-core/src/experiments/` with integration coverage in `tests/experiments_integration.rs`.
 - **System tests:** run `./scripts/system_test.sh` (writes artifacts under `artifacts/system-test/`).
+- **Documentation index:** [`docs/README.md`](docs/README.md) (includes the blackbox threat walkthrough).
 
 ## Reproducing stress-test sims
 
@@ -288,6 +289,7 @@ See:
 DiscOS includes simulation-backed checks for adversarial classes (oracle leakage, cross-probing pressure, and sybil scaling) to verify expected **kernel behavior under stress**. These are safe examples: they document defensive expectations and measurable outcomes, not operational attack playbooks.
 
 Start from:
+- [`docs/THREAT_MODEL_BLACKBOX.md`](docs/THREAT_MODEL_BLACKBOX.md) for an outsider-friendly blackbox walkthrough
 - `crates/discos-core/src/experiments/` for simulation definitions
 - `tests/experiments_integration.rs` for deterministic assertions over exp0/1/2/11
 - `docs/TEST_EVIDENCE.md` for test evidence mapping
