@@ -27,6 +27,7 @@ Deeper references: [Threat model worked example](docs/threat_model_worked_exampl
 2. UVP blackbox interface: [docs/uvp_blackbox_interface.md](docs/uvp_blackbox_interface.md)
 3. Exfiltration demo walkthrough: [examples/exfiltration_demo/](examples/exfiltration_demo/)
 4. 🚨 Positioning + dual-use risk matrix (with expanded use-case deep dives): [docs/POSITIONING.md](docs/POSITIONING.md)
+5. 🔒 Dual-use + misuse deployment policy (required reading for production): [docs/DUAL_USE_AND_MISUSE.md](docs/DUAL_USE_AND_MISUSE.md)
 
 Role-based guide: [docs/reader_map.md](docs/reader_map.md)
 
@@ -38,11 +39,7 @@ DiscOS is the untrusted discovery/client/tooling layer for EvidenceOS. EvidenceO
 
 Compatibility target is documented in [`COMPATIBILITY.md`](COMPATIBILITY.md).
 
-## Implementation status
-
-Quick parity reference for paper-vs-code claims: [`docs/PAPER_VS_CODE.md`](docs/PAPER_VS_CODE.md).
-
-Legacy implementation gate/details remain in [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
+Dual-use enforcement posture is specified in [`docs/DUAL_USE_AND_MISUSE.md`](docs/DUAL_USE_AND_MISUSE.md).
 
 ## Integration status
 

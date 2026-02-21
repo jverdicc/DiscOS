@@ -1,6 +1,6 @@
 # START HERE
 
-EvidenceOS + DiscOS provide a split architecture where EvidenceOS is the trusted verifier boundary and DiscOS is the fast-moving operator/client layer. EvidenceOS enforces lifecycle validity (`create → commit → freeze → seal → execute → fetch`) and fail-closed policy decisions, while DiscOS focuses on deterministic artifact preparation and transport. The core UVP value proposition is that repeated adaptive probing is treated as a stateful leakage problem, not a single-response prompt-quality problem. This means the trusted service enforces bounded information release, revocation/escalation behavior, and verifiable evidence publication at the protocol boundary. You can understand the model and operational implications through guided docs paths below without reading Rust code first.
+EvidenceOS + DiscOS provide a split architecture where EvidenceOS is the trusted verifier boundary and DiscOS is the fast-moving operator/client layer. EvidenceOS enforces lifecycle validity (`create → commit → freeze → seal → execute → fetch`) and fail-closed policy decisions, while DiscOS focuses on deterministic artifact preparation and transport. The core UVP value proposition is that repeated adaptive probing is treated as a stateful leakage problem, not a single-response prompt-quality problem. This means the trusted service enforces bounded information release, revocation/escalation behavior, and verifiable evidence publication at the protocol boundary. You can understand the model and operational implications through guided docs paths below without reading Rust code first. Demonstrations must remain safety-focused and must not provide real-world harmful instructions.
 
 ## If you're an alignment researcher
 
@@ -27,6 +27,7 @@ Read in this order:
 1. [Deployment security envelope (keys + holdouts isolation)](THREAT_MODEL_BLACKBOX.md#f-out-of-scope--deployment-assumptions)
 2. [EvidenceOS TLS/auth guidance](https://github.com/jverdicc/EvidenceOS#security--auth)
 3. [DiscOS runbook-style lifecycle commands](../README.md#claim-lifecycle-commands)
+4. [Dual-use + misuse policy](DUAL_USE_AND_MISUSE.md)
 
 
 ## ETL FAQ

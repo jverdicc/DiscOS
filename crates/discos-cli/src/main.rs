@@ -41,6 +41,9 @@ use discos_core::{
     },
     topicid::{canonicalize_output_schema_id, compute_topic_id, ClaimMetadata, TopicSignals},
 };
+use evidenceos_core::safety_policy::{
+    enforce_dual_use_policy, ClaimSafetyContext, DualUsePolicyConfig, EnforcementDecision,
+};
 use tokio_stream::StreamExt;
 use tonic::Code;
 use tracing_subscriber::EnvFilter;
@@ -88,6 +91,16 @@ struct Args {
     kernel_pubkey_hex: String,
     #[arg(long, default_value_t = false)]
     allow_protocol_drift: bool,
+    #[arg(long, default_value_t = true)]
+    require_structured_outputs: bool,
+    #[arg(long, default_value_t = true)]
+    deny_free_text_outputs: bool,
+    #[arg(long, value_delimiter = ',', default_value = "CBRN")]
+    force_heavy_lane_on_domain: Vec<String>,
+    #[arg(long, default_value_t = true)]
+    reject_on_high_risk_schema_mismatch: bool,
+    #[arg(long, default_value_t = true)]
+    production_mode: bool,
     #[command(subcommand)]
     cmd: Command,
 }
@@ -234,6 +247,16 @@ fn validate_oracle_id(oracle_id: &str) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn dual_use_policy_from_args(args: &Args) -> DualUsePolicyConfig {
+    DualUsePolicyConfig {
+        require_structured_outputs: args.require_structured_outputs,
+        deny_free_text_outputs: args.deny_free_text_outputs,
+        force_heavy_lane_on_domain: args.force_heavy_lane_on_domain.clone(),
+        reject_on_high_risk_schema_mismatch: args.reject_on_high_risk_schema_mismatch,
+        production_mode: args.production_mode,
+    }
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -946,6 +969,27 @@ async fn main() -> anyhow::Result<()> {
             } => {
                 validate_oracle_id(&oracle_id)?;
                 let output_schema_id = canonicalize_output_schema_id(&output_schema_id);
+                let dual_use_policy = dual_use_policy_from_args(&args);
+                let mut lane = lane;
+                match enforce_dual_use_policy(
+                    &dual_use_policy,
+                    &ClaimSafetyContext {
+                        domain: "CBRN",
+                        lane: &lane,
+                        output_schema_id: &output_schema_id,
+                        requests_free_text_output: false,
+                    },
+                ) {
+                    EnforcementDecision::Allow => {}
+                    EnforcementDecision::ForceHeavyLane { required_lane } => {
+                        lane = required_lane.to_string();
+                    }
+                    EnforcementDecision::Reject { reason } => {
+                        return Err(anyhow!(
+                            "dual-use policy rejected claim create request: {reason}"
+                        ));
+                    }
+                }
                 let dir = claim_dir(&claim_name);
                 fs::create_dir_all(&dir)?;
 
@@ -1347,6 +1391,41 @@ feed"
         assert!(validate_oracle_id(&"a".repeat(MAX_ORACLE_ID_LEN + 1)).is_err());
     }
 
+    #[test]
+    fn dual_use_policy_hook_forces_heavy_lane() {
+        let cfg = DualUsePolicyConfig::default();
+        let decision = enforce_dual_use_policy(
+            &cfg,
+            &ClaimSafetyContext {
+                domain: "CBRN",
+                lane: "cbrn",
+                output_schema_id: "cbrn-sc.v1",
+                requests_free_text_output: false,
+            },
+        );
+        assert_eq!(
+            decision,
+            EnforcementDecision::ForceHeavyLane {
+                required_lane: "heavy"
+            }
+        );
+    }
+
+    #[test]
+    fn dual_use_policy_hook_rejects_non_cbrn_schema_in_high_risk_domain() {
+        let cfg = DualUsePolicyConfig::default();
+        let decision = enforce_dual_use_policy(
+            &cfg,
+            &ClaimSafetyContext {
+                domain: "CBRN",
+                lane: "heavy",
+                output_schema_id: "free-text.v1",
+                requests_free_text_output: false,
+            },
+        );
+        assert!(matches!(decision, EnforcementDecision::Reject { .. }));
+    }
+
     proptest::proptest! {
         #[test]
         fn oracle_id_fuzz_never_panics_and_rejects_illegal_forms(input in proptest::collection::vec(any::<u8>(), 0..256)) {
@@ -1412,6 +1491,11 @@ feed"
             log: "info".to_string(),
             kernel_pubkey_hex: "".to_string(),
             allow_protocol_drift: false,
+            require_structured_outputs: true,
+            deny_free_text_outputs: true,
+            force_heavy_lane_on_domain: vec!["CBRN".to_string()],
+            reject_on_high_risk_schema_mismatch: true,
+            production_mode: true,
             cmd: Command::Health,
         };
         assert!(ensure_certify_transport_security(&insecure_args).is_err());
