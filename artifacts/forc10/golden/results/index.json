@@ -1,0 +1,10 @@
+{
+  "non_reproducible": [],
+  "outputs": [
+    "raw/index.json",
+    "results/experiments.csv",
+    "results/summary.csv"
+  ],
+  "schema_version": "discos.forc10.repro.index.v1",
+  "source": "paper_artifacts/reproduce_paper.py"
+}

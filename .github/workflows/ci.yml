@@ -46,6 +46,17 @@ jobs:
           path: artifacts/ci/
           if-no-files-found: error
 
+  forc10_verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run FORC10 artifact verification
+        run: make -C artifacts/forc10 verify
+
   openclaw_plugin:
     runs-on: ubuntu-latest
     steps:

@@ -52,3 +52,13 @@ python3 paper_artifacts/reproduce_paper.py --smoke --out artifacts/paper-artifac
 ```
 
 Smoke mode generates Exp1, Exp11, and Exp12 plus an `index.json`.
+
+## FORC10 auditable harness
+
+For a one-command reproducibility + golden verification workflow used by CI, run:
+
+```bash
+make -C artifacts/forc10 verify
+```
+
+See `artifacts/forc10/README.md` for setup/runtime details and generated output structure.
