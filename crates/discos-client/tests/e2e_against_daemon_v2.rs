@@ -187,13 +187,12 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
         _: Request<pb::GetServerInfoRequest>,
     ) -> Result<Response<pb::GetServerInfoResponse>, Status> {
         Ok(Response::new(pb::GetServerInfoResponse {
-            proto_hash: "test-proto-hash".into(),
-            protocol_package: "evidenceos.v2".into(),
-            git_commit: "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af".into(),
-            build_timestamp: "2026-01-01T00:00:00Z".into(),
-            key_ids: vec!["k1".into()],
-            compatibility_min_rev: "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af".into(),
-            compatibility_max_rev: "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af".into(),
+            protocol_semver: evidenceos_protocol::PROTOCOL_SEMVER.into(),
+            proto_hash: evidenceos_protocol::PROTO_SHA256.into(),
+            build_git_commit: "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af".into(),
+            build_time_utc: "2026-01-01T00:00:00Z".into(),
+            daemon_version: "evidenceosd/2.1.0".into(),
+            feature_flags: vec!["tls_enabled".into()],
         }))
     }
 

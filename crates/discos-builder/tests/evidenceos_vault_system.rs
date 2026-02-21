@@ -193,13 +193,12 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
         _: Request<pb::GetServerInfoRequest>,
     ) -> Result<Response<pb::GetServerInfoResponse>, Status> {
         Ok(Response::new(pb::GetServerInfoResponse {
-            proto_hash: "test".into(),
-            protocol_package: "evidenceos.v2".into(),
-            git_commit: "test".into(),
-            build_timestamp: "2026-01-01T00:00:00Z".into(),
-            key_ids: vec!["test-key".into()],
-            compatibility_min_rev: "test".into(),
-            compatibility_max_rev: "test".into(),
+            protocol_semver: evidenceos_protocol::PROTOCOL_SEMVER.into(),
+            proto_hash: evidenceos_protocol::PROTO_SHA256.into(),
+            build_git_commit: "test".into(),
+            build_time_utc: "2026-01-01T00:00:00Z".into(),
+            daemon_version: "evidenceosd/test".into(),
+            feature_flags: vec!["tls_enabled".into()],
         }))
     }
 

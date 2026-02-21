@@ -85,7 +85,7 @@ pub struct MultiSignalTopicIdArtifact {
 pub struct EvidenceOsProbe {
     pub endpoint: String,
     pub reachable: bool,
-    pub protocol_package: Option<String>,
+    pub protocol_semver: Option<String>,
     pub proto_hash: Option<String>,
 }
 
@@ -271,14 +271,14 @@ async fn probe_evidenceos(endpoint: &str) -> EvidenceOsProbe {
     let mut probe = EvidenceOsProbe {
         endpoint: endpoint.to_string(),
         reachable: false,
-        protocol_package: None,
+        protocol_semver: None,
         proto_hash: None,
     };
 
     if let Ok(mut client) = DiscosClient::connect(endpoint).await {
         if let Ok(info) = client.get_server_info().await {
             probe.reachable = true;
-            probe.protocol_package = Some(info.protocol_package);
+            probe.protocol_semver = Some(info.protocol_semver);
             probe.proto_hash = Some(info.proto_hash);
         }
     }
