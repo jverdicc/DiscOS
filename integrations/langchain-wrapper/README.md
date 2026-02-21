@@ -1,6 +1,13 @@
 # langchain-evidenceos
 
-`langchain-evidenceos` is an installable Python package that enforces EvidenceOS preflight policy before a LangChain tool call executes.
+`langchain-evidenceos` is a supported Python integration for enforcing EvidenceOS preflight policy around LangChain-style tool execution.
+
+## What this adapter provides
+
+- `EvidenceOSGuardCallbackHandler` for callback-based preflight gating.
+- `EvidenceOSRunnableAdapter` for Runnable-style tool wrapping.
+- Policy receipts attached to every tool execution result.
+- Configurable timeout + retries for preflight calls.
 
 ## EvidenceOS compatibility
 
@@ -28,11 +35,13 @@ Environment variables:
 - `EVIDENCEOS_URL` (required unless passed directly)
 - `EVIDENCEOS_TOKEN` (optional Bearer token)
 - `EVIDENCEOS_TIMEOUT_MS` (optional, default `120`)
+- `EVIDENCEOS_MAX_RETRIES` (optional, default `2`)
+- `EVIDENCEOS_RETRY_BACKOFF_MS` (optional, default `25`)
 
-## Usage
+## Usage (Runnable adapter)
 
 ```python
-from langchain_evidenceos import EvidenceOSGuardCallbackHandler
+from langchain_evidenceos import EvidenceOSGuardCallbackHandler, EvidenceOSRunnableAdapter
 
 guard = EvidenceOSGuardCallbackHandler(
     evidenceos_url="http://127.0.0.1:50051",
@@ -40,15 +49,28 @@ guard = EvidenceOSGuardCallbackHandler(
     agent_id="agent-abc",
 )
 
-# Framework calls on_tool_start internally, or call directly:
-safe_params = guard.guard_tool_call(tool_name="search.web", tool_input={"query": "status page"})
+adapter = EvidenceOSRunnableAdapter(
+    tool_name="search.web",
+    tool_func=lambda params: {"answer": f"result for {params['query']}"},
+    guard=guard,
+)
+
+result = adapter.invoke({"query": "status page"})
+print(result.output)
+print(result.policy_receipt)
 ```
 
 Behavior:
 
 - `DENY` and `REQUIRE_HUMAN` raise `ToolException` and block execution.
-- `DOWNGRADE` with `rewrittenParams` rewrites tool input.
+- `DOWNGRADE` with `rewrittenParams` rewrites tool input before tool execution.
 - Network/preflight errors fail closed for high-risk tools (`exec`, `shell.exec`, `fs.write`, `fs.delete_tree`, `email.send`, `payment.charge`) to match OpenClaw behavior.
+
+## End-to-end example
+
+```bash
+python integrations/langchain-wrapper/examples/e2e_preflight_adapter.py
+```
 
 ## Audit format
 

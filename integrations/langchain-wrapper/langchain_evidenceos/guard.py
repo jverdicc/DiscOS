@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, MutableMapping
@@ -14,6 +15,7 @@ if importlib.util.find_spec("langchain_core"):
     from langchain_core.callbacks import BaseCallbackHandler
     from langchain_core.tools import ToolException
 else:
+
     class BaseCallbackHandler:  # type: ignore[no-redef]
         pass
 
@@ -23,6 +25,8 @@ else:
 Decision = str
 
 DEFAULT_TIMEOUT_MS = 120
+DEFAULT_MAX_RETRIES = 2
+DEFAULT_RETRY_BACKOFF_MS = 25
 DEFAULT_HIGH_RISK_TOOLS = {
     "exec",
     "shell.exec",
@@ -34,10 +38,27 @@ DEFAULT_HIGH_RISK_TOOLS = {
 
 
 @dataclass(frozen=True)
+class PolicyReceipt:
+    decision: Decision
+    reason_code: str
+    reason_detail: str | None
+    budget_delta: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class PreflightResult:
+    params: dict[str, Any]
+    blocked: bool
+    receipt: PolicyReceipt
+
+
+@dataclass(frozen=True)
 class EvidenceOSConfig:
     evidenceos_url: str
     token: str | None = None
     timeout_ms: int = DEFAULT_TIMEOUT_MS
+    max_retries: int = DEFAULT_MAX_RETRIES
+    retry_backoff_ms: int = DEFAULT_RETRY_BACKOFF_MS
 
     @classmethod
     def from_env(cls) -> "EvidenceOSConfig":
@@ -46,7 +67,17 @@ class EvidenceOSConfig:
             raise ValueError("EVIDENCEOS_URL is required")
         token = os.getenv("EVIDENCEOS_TOKEN") or None
         timeout_ms = int(os.getenv("EVIDENCEOS_TIMEOUT_MS", str(DEFAULT_TIMEOUT_MS)))
-        return cls(evidenceos_url=url.rstrip("/"), token=token, timeout_ms=timeout_ms)
+        max_retries = int(os.getenv("EVIDENCEOS_MAX_RETRIES", str(DEFAULT_MAX_RETRIES)))
+        retry_backoff_ms = int(
+            os.getenv("EVIDENCEOS_RETRY_BACKOFF_MS", str(DEFAULT_RETRY_BACKOFF_MS))
+        )
+        return cls(
+            evidenceos_url=url.rstrip("/"),
+            token=token,
+            timeout_ms=timeout_ms,
+            max_retries=max_retries,
+            retry_backoff_ms=retry_backoff_ms,
+        )
 
 
 def _stable_json(value: Any) -> str:
@@ -67,26 +98,39 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
         evidenceos_url: str | None = None,
         token: str | None = None,
         timeout_ms: int = DEFAULT_TIMEOUT_MS,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        retry_backoff_ms: int = DEFAULT_RETRY_BACKOFF_MS,
         session_id: str | None = None,
         agent_id: str | None = None,
         high_risk_tools: set[str] | None = None,
         fail_closed_risk: str = "high-only",
         audit_logger: Callable[[dict[str, Any]], None] | None = None,
+        sleeper: Callable[[float], None] | None = None,
     ) -> None:
-        cfg = EvidenceOSConfig.from_env() if evidenceos_url is None else EvidenceOSConfig(
-            evidenceos_url=evidenceos_url.rstrip("/"),
-            token=token,
-            timeout_ms=timeout_ms,
+        cfg = (
+            EvidenceOSConfig.from_env()
+            if evidenceos_url is None
+            else EvidenceOSConfig(
+                evidenceos_url=evidenceos_url.rstrip("/"),
+                token=token,
+                timeout_ms=timeout_ms,
+                max_retries=max_retries,
+                retry_backoff_ms=retry_backoff_ms,
+            )
         )
         self.evidenceos_url = cfg.evidenceos_url
         self.token = cfg.token
         self.timeout_ms = cfg.timeout_ms
+        self.max_retries = cfg.max_retries
+        self.retry_backoff_ms = cfg.retry_backoff_ms
         self.session_id = session_id
         self.agent_id = agent_id
         self.high_risk_tools = high_risk_tools or set(DEFAULT_HIGH_RISK_TOOLS)
         self.fail_closed_risk = fail_closed_risk
         self.audit_logger = audit_logger or self._default_audit_logger
         self.last_rewritten_params: dict[str, Any] | None = None
+        self.last_policy_receipt: PolicyReceipt | None = None
+        self._sleep = sleeper or time.sleep
 
     @property
     def always_verbose(self) -> bool:
@@ -113,15 +157,19 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
             except json.JSONDecodeError:
                 tool_input = {"input": input_str}
 
-        rewritten = self.guard_tool_call(tool_name=tool_name, tool_input=tool_input)
+        preflight_result = self.preflight_tool_call(tool_name=tool_name, tool_input=tool_input)
+        rewritten = preflight_result.params
         self.last_rewritten_params = rewritten
+        self.last_policy_receipt = preflight_result.receipt
 
         if inputs is not None and isinstance(inputs, MutableMapping):
             inputs.clear()
             inputs.update(rewritten)
         return rewritten
 
-    def guard_tool_call(self, *, tool_name: str, tool_input: Mapping[str, Any] | str) -> dict[str, Any]:
+    def preflight_tool_call(
+        self, *, tool_name: str, tool_input: Mapping[str, Any] | str
+    ) -> PreflightResult:
         params = self._normalize_params(tool_input)
         payload = {
             "toolName": tool_name,
@@ -132,13 +180,29 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
 
         try:
             response = self._preflight(payload)
-        except (TimeoutError, ConnectionError, urllib_error.HTTPError, urllib_error.URLError, ValueError) as exc:
-            if self._should_fail_closed(tool_name):
-                self._emit_audit(tool_name=tool_name, params=params, decision="DENY", reason_code="EvidenceUnavailable", reason_detail=str(exc), blocked=True)
+        except (
+            TimeoutError,
+            ConnectionError,
+            urllib_error.HTTPError,
+            urllib_error.URLError,
+            ValueError,
+        ) as exc:
+            receipt = PolicyReceipt(
+                decision="DENY" if self._should_fail_closed(tool_name) else "ALLOW",
+                reason_code="EvidenceUnavailable",
+                reason_detail=str(exc),
+            )
+            self._emit_audit(
+                tool_name=tool_name,
+                params=params,
+                decision=receipt.decision,
+                reason_code=receipt.reason_code,
+                reason_detail=receipt.reason_detail,
+                blocked=receipt.decision == "DENY",
+            )
+            if receipt.decision == "DENY":
                 raise ToolException(f"EvidenceOS preflight unavailable: {exc}") from exc
-
-            self._emit_audit(tool_name=tool_name, params=params, decision="ALLOW", reason_code="EvidenceUnavailable", reason_detail=str(exc), blocked=False)
-            return dict(params)
+            return PreflightResult(params=dict(params), blocked=False, receipt=receipt)
 
         decision = str(response.get("decision", "DENY"))
         reason_code = str(response.get("reasonCode", "UnknownDecision"))
@@ -150,6 +214,12 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
         if decision == "DOWNGRADE" and isinstance(rewritten, dict):
             next_params = rewritten
 
+        receipt = PolicyReceipt(
+            decision=decision,
+            reason_code=reason_code,
+            reason_detail=reason_detail,
+            budget_delta=response.get("budgetDelta"),
+        )
         self._emit_audit(
             tool_name=tool_name,
             params=params,
@@ -162,7 +232,14 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
 
         if blocked:
             raise ToolException(f"{reason_code}:{reason_detail or 'n/a'}")
-        return next_params
+        return PreflightResult(params=next_params, blocked=False, receipt=receipt)
+
+    def guard_tool_call(
+        self, *, tool_name: str, tool_input: Mapping[str, Any] | str
+    ) -> dict[str, Any]:
+        result = self.preflight_tool_call(tool_name=tool_name, tool_input=tool_input)
+        self.last_policy_receipt = result.receipt
+        return result.params
 
     def _preflight(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         headers = {"content-type": "application/json"}
@@ -175,16 +252,43 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
             headers=headers,
             method="POST",
         )
-        with urllib_request.urlopen(req, timeout=self.timeout_ms / 1000) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-        if not isinstance(body, dict):
-            raise ValueError("Invalid JSON body from EvidenceOS")
-        return body
+
+        attempts = self.max_retries + 1
+        last_exc: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                with urllib_request.urlopen(req, timeout=self.timeout_ms / 1000) as resp:
+                    body = json.loads(resp.read().decode("utf-8"))
+                if not isinstance(body, dict):
+                    raise ValueError("Invalid JSON body from EvidenceOS")
+                return body
+            except (urllib_error.HTTPError, urllib_error.URLError, TimeoutError, ValueError) as exc:
+                retryable_http = isinstance(exc, urllib_error.HTTPError) and exc.code >= 500
+                retryable = retryable_http or isinstance(exc, (urllib_error.URLError, TimeoutError))
+                if attempt >= self.max_retries or not retryable:
+                    last_exc = exc
+                    break
+                backoff_s = ((2**attempt) * self.retry_backoff_ms) / 1000
+                self._sleep(backoff_s)
+
+        if last_exc is not None:
+            raise last_exc
+        raise ValueError("EvidenceOS preflight failed without a captured exception")
 
     def _should_fail_closed(self, tool_name: str) -> bool:
         return self.fail_closed_risk == "all" or tool_name in self.high_risk_tools
 
-    def _emit_audit(self, *, tool_name: str, params: Mapping[str, Any], decision: Decision, reason_code: str, reason_detail: str | None, blocked: bool, budget_delta: dict[str, Any] | None = None) -> None:
+    def _emit_audit(
+        self,
+        *,
+        tool_name: str,
+        params: Mapping[str, Any],
+        decision: Decision,
+        reason_code: str,
+        reason_detail: str | None,
+        blocked: bool,
+        budget_delta: dict[str, Any] | None = None,
+    ) -> None:
         event: dict[str, Any] = {
             "type": "evidenceos.audit",
             "ts": datetime.now(tz=timezone.utc).isoformat(),
