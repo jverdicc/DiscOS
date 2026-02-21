@@ -15,7 +15,7 @@ prost = "0.13"
 sha2 = "0.10"
 ed25519-dalek = "2"
 evidenceos-protocol.workspace = true
-evidenceos-core = { path = "../evidenceos-core" }
+evidenceos-verifier.workspace = true
 
 [dev-dependencies]
 base64 = "0.22"

@@ -5,7 +5,8 @@ use discos_builder::{
 };
 use discos_client::{pb, DiscosClient};
 use ed25519_dalek::{Signer, SigningKey};
-use evidenceos_core::{crypto_transcripts, wasm_aspec::verify_restricted_wasm};
+use evidenceos_core::wasm_aspec::verify_restricted_wasm;
+use evidenceos_verifier as verifier;
 use sha2::Digest;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -100,12 +101,12 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
             "structured_output_hash_hex": hex::encode(sha2::Sha256::digest(b"{}")),
         }))
         .map_err(|e| Status::internal(e.to_string()))?;
-        let leaf = crypto_transcripts::etl_leaf_hash(&capsule);
+        let leaf = verifier::etl_leaf_hash(&capsule);
         let mut st = self.0.lock().await;
         st.root = leaf;
         st.sig = st
             .signing_key
-            .sign(&crypto_transcripts::sth_signature_digest(1, st.root))
+            .sign(&verifier::sth_signature_digest(1, st.root))
             .to_bytes();
 
         Ok(Response::new(pb::FetchCapsuleResponse {
