@@ -22,5 +22,6 @@ pub mod etl;
 pub mod guest_abi;
 pub mod ledger;
 pub mod manifest;
+pub mod safety_policy;
 pub mod topicid;
 pub mod wasm_aspec;

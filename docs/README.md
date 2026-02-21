@@ -9,6 +9,7 @@ This folder contains test evidence, scenario fixtures, and threat-model explaine
 - [Test Coverage Matrix](TEST_COVERAGE_MATRIX.md) — mapping of guarantees to tests.
 - [Test Evidence](TEST_EVIDENCE.md) — experiment/test evidence notes.
 - [Issue Backlog](ISSUE_BACKLOG.md) — prioritized future work.
+- [Dual-use + misuse policy](DUAL_USE_AND_MISUSE.md) — required deployment safety controls and prohibited uses.
 
 ## Scenario fixtures
 

@@ -17,6 +17,7 @@ This repo is where contributors and integrators can run the client workflows, bl
 2. UVP blackbox interface: [docs/uvp_blackbox_interface.md](docs/uvp_blackbox_interface.md)
 3. Exfiltration demo walkthrough: [examples/exfiltration_demo/](examples/exfiltration_demo/)
 4. 🚨 Positioning + dual-use risk matrix (with expanded use-case deep dives): [docs/POSITIONING.md](docs/POSITIONING.md)
+5. 🔒 Dual-use + misuse deployment policy (required reading for production): [docs/DUAL_USE_AND_MISUSE.md](docs/DUAL_USE_AND_MISUSE.md)
 
 Role-based guide: [docs/reader_map.md](docs/reader_map.md)
 
@@ -27,6 +28,8 @@ DiscOS is the untrusted discovery/client/tooling layer for EvidenceOS. EvidenceO
 ➡️ EvidenceOS repository: <https://github.com/jverdicc/EvidenceOS>
 
 Compatibility target is documented in [`COMPATIBILITY.md`](COMPATIBILITY.md).
+
+Dual-use enforcement posture is specified in [`docs/DUAL_USE_AND_MISUSE.md`](docs/DUAL_USE_AND_MISUSE.md).
 
 ## Integration status
 
