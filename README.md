@@ -320,9 +320,10 @@ Start from:
 ```bash
 cargo run -p discos-cli -- nullspec calibrate --oracle-id default --endpoint http://127.0.0.1:50051 --runs 512 --out artifacts/calibration/default.json
 cargo run -p discos-cli -- paper-suite run --out artifacts/paper-suite --endpoint http://127.0.0.1:50051
+make reproduce-paper
 ```
 
-Both commands emit machine-parseable JSON and deterministic artifact schemas.
+All commands emit machine-parseable JSON and deterministic artifact schemas. See `docs/REPRODUCE_PAPER.md` for the full experiment-number mapping and expected outputs.
 
 ## License
 

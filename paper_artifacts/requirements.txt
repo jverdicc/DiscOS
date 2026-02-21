@@ -1,0 +1,2 @@
+# This suite intentionally uses only Python standard-library modules.
+# No third-party dependencies are required.
