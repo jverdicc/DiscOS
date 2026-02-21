@@ -6,14 +6,17 @@
 
 - `EvidenceOSGuardCallbackHandler` for callback-based preflight gating.
 - `EvidenceOSRunnableAdapter` for Runnable-style tool wrapping.
-- Policy receipts attached to every tool execution result.
+- Structured return types (`PolicyReceipt`, `PreflightResult`, `ToolExecutionResult`).
+- Typed exceptions (`EvidenceOSUnavailableError`, `EvidenceOSDecisionError`).
 - Configurable timeout + retries for preflight calls.
 
 ## EvidenceOS compatibility
 
-This package targets the EvidenceOS **CODEX-E7** preflight endpoint:
+This package targets the EvidenceOS **CODEX-E7** HTTP preflight endpoint:
 
 - **Method + path**: `POST /v1/preflight_tool_call`
+- **Transport**: HTTP/JSON (not gRPC)
+- **Typical local URL**: `http://127.0.0.1:8787`
 - **Request JSON**: `{ "toolName", "params", "sessionId", "agentId" }`
 - **Response fields used**:
   - `decision`: `ALLOW | DENY | REQUIRE_HUMAN | DOWNGRADE`
@@ -33,10 +36,17 @@ pip install -e integrations/langchain-wrapper
 Environment variables:
 
 - `EVIDENCEOS_URL` (required unless passed directly)
-- `EVIDENCEOS_TOKEN` (optional Bearer token)
+- `EVIDENCEOS_TOKEN` (optional Bearer token for preflight auth)
 - `EVIDENCEOS_TIMEOUT_MS` (optional, default `120`)
 - `EVIDENCEOS_MAX_RETRIES` (optional, default `2`)
 - `EVIDENCEOS_RETRY_BACKOFF_MS` (optional, default `25`)
+
+Authentication behavior:
+
+- When `EVIDENCEOS_TOKEN` or `token=...` is set, the client sends `Authorization: Bearer <token>`.
+- `401`/`403` responses are treated as non-retryable auth failures.
+- In the default safe profile (`fail_closed_risk="all"`), auth failures deny tool execution.
+- If `fail_closed_risk="high-only"`, non-high-risk tools can fail open when preflight is unavailable.
 
 ## Usage (Runnable adapter)
 
@@ -44,7 +54,7 @@ Environment variables:
 from langchain_evidenceos import EvidenceOSGuardCallbackHandler, EvidenceOSRunnableAdapter
 
 guard = EvidenceOSGuardCallbackHandler(
-    evidenceos_url="http://127.0.0.1:50051",
+    evidenceos_url="http://127.0.0.1:8787",
     session_id="session-123",
     agent_id="agent-abc",
 )
@@ -60,11 +70,18 @@ print(result.output)
 print(result.policy_receipt)
 ```
 
-Behavior:
+Decision handling:
 
-- `DENY` and `REQUIRE_HUMAN` raise `ToolException` and block execution.
-- `DOWNGRADE` with `rewrittenParams` rewrites tool input before tool execution.
-- Network/preflight errors fail closed for high-risk tools (`exec`, `shell.exec`, `fs.write`, `fs.delete_tree`, `email.send`, `payment.charge`) to match OpenClaw behavior.
+- `ALLOW`: tool executes with original params.
+- `DOWNGRADE`: tool executes with `rewrittenParams`.
+- `DENY` and `REQUIRE_HUMAN`: raises `EvidenceOSDecisionError`.
+- `DEFER` responses are normalized to `REQUIRE_HUMAN`.
+
+Failure handling:
+
+- Timeout/network/5xx failures are retried with exponential backoff.
+- Non-retryable failures (4xx auth/policy endpoint issues) stop immediately.
+- Default is fail-closed for all tools (`fail_closed_risk="all"`).
 
 ## End-to-end example
 

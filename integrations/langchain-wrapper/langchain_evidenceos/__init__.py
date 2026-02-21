@@ -1,6 +1,9 @@
 from .adapter import EvidenceOSRunnableAdapter, ToolExecutionResult
 from .guard import (
+    EvidenceOSDecisionError,
     EvidenceOSGuardCallbackHandler,
+    EvidenceOSToolException,
+    EvidenceOSUnavailableError,
     PolicyReceipt,
     PreflightResult,
     ToolException,
@@ -8,8 +11,11 @@ from .guard import (
 )
 
 __all__ = [
+    "EvidenceOSDecisionError",
     "EvidenceOSGuardCallbackHandler",
     "EvidenceOSRunnableAdapter",
+    "EvidenceOSToolException",
+    "EvidenceOSUnavailableError",
     "PolicyReceipt",
     "PreflightResult",
     "ToolException",

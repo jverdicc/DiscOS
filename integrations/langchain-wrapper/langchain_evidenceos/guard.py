@@ -7,7 +7,7 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Mapping, MutableMapping
+from typing import Any, Callable, Literal, Mapping, MutableMapping
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -22,7 +22,7 @@ else:
     class ToolException(Exception):  # type: ignore[no-redef]
         pass
 
-Decision = str
+Decision = Literal["ALLOW", "DENY", "REQUIRE_HUMAN", "DOWNGRADE"]
 
 DEFAULT_TIMEOUT_MS = 120
 DEFAULT_MAX_RETRIES = 2
@@ -80,6 +80,31 @@ class EvidenceOSConfig:
         )
 
 
+@dataclass(frozen=True)
+class EvidenceOSDecision:
+    decision: Decision
+    reason_code: str
+    reason_detail: str | None
+    rewritten_params: dict[str, Any] | None
+    budget_delta: dict[str, Any] | None
+
+
+class EvidenceOSToolException(ToolException):
+    """Base exception for typed policy failures."""
+
+
+class EvidenceOSUnavailableError(EvidenceOSToolException):
+    """EvidenceOS preflight could not be reached or produced invalid output."""
+
+
+class EvidenceOSDecisionError(EvidenceOSToolException):
+    """EvidenceOS returned a blocking policy decision."""
+
+    def __init__(self, message: str, *, receipt: PolicyReceipt) -> None:
+        super().__init__(message)
+        self.receipt = receipt
+
+
 def _stable_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -103,7 +128,7 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
         session_id: str | None = None,
         agent_id: str | None = None,
         high_risk_tools: set[str] | None = None,
-        fail_closed_risk: str = "high-only",
+        fail_closed_risk: str = "all",
         audit_logger: Callable[[dict[str, Any]], None] | None = None,
         sleeper: Callable[[float], None] | None = None,
     ) -> None:
@@ -201,37 +226,37 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
                 blocked=receipt.decision == "DENY",
             )
             if receipt.decision == "DENY":
-                raise ToolException(f"EvidenceOS preflight unavailable: {exc}") from exc
+                raise EvidenceOSUnavailableError(f"EvidenceOS preflight unavailable: {exc}") from exc
             return PreflightResult(params=dict(params), blocked=False, receipt=receipt)
 
-        decision = str(response.get("decision", "DENY"))
-        reason_code = str(response.get("reasonCode", "UnknownDecision"))
-        reason_detail = response.get("reasonDetail")
-        rewritten = response.get("rewrittenParams")
-        blocked = decision in {"DENY", "REQUIRE_HUMAN"}
+        parsed = self._parse_decision(response)
+        blocked = parsed.decision in {"DENY", "REQUIRE_HUMAN"}
 
         next_params = dict(params)
-        if decision == "DOWNGRADE" and isinstance(rewritten, dict):
-            next_params = rewritten
+        if parsed.decision == "DOWNGRADE" and isinstance(parsed.rewritten_params, dict):
+            next_params = parsed.rewritten_params
 
         receipt = PolicyReceipt(
-            decision=decision,
-            reason_code=reason_code,
-            reason_detail=reason_detail,
-            budget_delta=response.get("budgetDelta"),
+            decision=parsed.decision,
+            reason_code=parsed.reason_code,
+            reason_detail=parsed.reason_detail,
+            budget_delta=parsed.budget_delta,
         )
         self._emit_audit(
             tool_name=tool_name,
             params=params,
-            decision=decision,
-            reason_code=reason_code,
-            reason_detail=reason_detail,
+            decision=parsed.decision,
+            reason_code=parsed.reason_code,
+            reason_detail=parsed.reason_detail,
             blocked=blocked,
-            budget_delta=response.get("budgetDelta"),
+            budget_delta=parsed.budget_delta,
         )
 
         if blocked:
-            raise ToolException(f"{reason_code}:{reason_detail or 'n/a'}")
+            raise EvidenceOSDecisionError(
+                f"{parsed.reason_code}:{parsed.reason_detail or 'n/a'}",
+                receipt=receipt,
+            )
         return PreflightResult(params=next_params, blocked=False, receipt=receipt)
 
     def guard_tool_call(
@@ -277,6 +302,33 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
 
     def _should_fail_closed(self, tool_name: str) -> bool:
         return self.fail_closed_risk == "all" or tool_name in self.high_risk_tools
+
+    @staticmethod
+    def _parse_decision(response: Mapping[str, Any]) -> EvidenceOSDecision:
+        if not isinstance(response, Mapping):
+            raise ValueError("Invalid JSON body from EvidenceOS")
+
+        raw_decision = str(response.get("decision", "DENY")).upper()
+        decision: Decision
+        if raw_decision == "DEFER":
+            decision = "REQUIRE_HUMAN"
+        elif raw_decision in {"ALLOW", "DENY", "REQUIRE_HUMAN", "DOWNGRADE"}:
+            decision = raw_decision
+        else:
+            decision = "DENY"
+
+        reason_detail = response.get("reasonDetail")
+        return EvidenceOSDecision(
+            decision=decision,
+            reason_code=str(response.get("reasonCode", "UnknownDecision")),
+            reason_detail=str(reason_detail) if reason_detail is not None else None,
+            rewritten_params=response.get("rewrittenParams")
+            if isinstance(response.get("rewrittenParams"), dict)
+            else None,
+            budget_delta=response.get("budgetDelta")
+            if isinstance(response.get("budgetDelta"), dict)
+            else None,
+        )
 
     def _emit_audit(
         self,
