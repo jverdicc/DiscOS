@@ -1,4 +1,4 @@
-.PHONY: fmt lint test coverage-core coverage-client check-coverage-threshold-drift test-evidence demo-exfil-baseline demo-exfil-evidenceos-mock
+.PHONY: fmt lint test coverage-core coverage-client check-coverage-threshold-drift test-evidence demo-exfil-baseline demo-exfil-evidenceos-mock reproduce-paper
 
 fmt:
 	cargo fmt --all --check
@@ -26,3 +26,6 @@ demo-exfil-baseline:
 
 demo-exfil-evidenceos-mock:
 	python3 examples/exfiltration_demo/attack_bitflip.py --mode evidenceos-mock --n 64 --seed 7 --quant-step 0.05 --hysteresis 0.03 --budget 48
+
+reproduce-paper:
+	python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts
