@@ -66,6 +66,22 @@ struct SthCache {
 struct Args {
     #[arg(long, default_value = "http://127.0.0.1:50051")]
     endpoint: String,
+    #[arg(long)]
+    tls_ca_cert_pem: Option<PathBuf>,
+    #[arg(long)]
+    tls_domain_name: Option<String>,
+    #[arg(long)]
+    tls_client_cert_pem: Option<PathBuf>,
+    #[arg(long)]
+    tls_client_key_pem: Option<PathBuf>,
+    #[arg(long, env = "DISCOS_BEARER_TOKEN")]
+    bearer_token: Option<String>,
+    #[arg(long)]
+    hmac_key_id: Option<String>,
+    #[arg(long, env = "DISCOS_HMAC_SECRET_HEX")]
+    hmac_secret_hex: Option<String>,
+    #[arg(long, default_value_t = false)]
+    allow_insecure_certify: bool,
     #[arg(long, default_value = "info")]
     log: String,
     #[arg(long, env = "DISCOS_KERNEL_PUBKEY_HEX", default_value = "")]
@@ -260,6 +276,103 @@ fn cache_key(endpoint: &str, kernel_pubkey_hex: &str) -> String {
     } else {
         format!("{endpoint}#{kernel_pubkey_hex}")
     }
+}
+
+fn transport_is_secure(endpoint: &str, tls_ca_cert_pem: Option<&Path>) -> bool {
+    endpoint.starts_with("https://") || tls_ca_cert_pem.is_some()
+}
+
+fn auth_is_configured(args: &Args) -> bool {
+    args.bearer_token.is_some() || args.hmac_key_id.is_some()
+}
+
+fn warn_if_insecure(args: &Args) {
+    let tls_enabled = transport_is_secure(&args.endpoint, args.tls_ca_cert_pem.as_deref());
+    let auth_enabled = auth_is_configured(args);
+    if !tls_enabled {
+        eprintln!(
+            "WARNING: insecure transport: endpoint={} is not TLS-protected; pass --endpoint https://... and --tls-ca-cert-pem to enable TLS.",
+            args.endpoint
+        );
+    }
+    if !auth_enabled {
+        eprintln!(
+            "WARNING: unauthenticated connection: no bearer or HMAC auth configured; pass --bearer-token or --hmac-key-id/--hmac-secret-hex."
+        );
+    }
+}
+
+fn ensure_certify_transport_security(args: &Args) -> anyhow::Result<()> {
+    if transport_is_secure(&args.endpoint, args.tls_ca_cert_pem.as_deref()) {
+        return Ok(());
+    }
+    anyhow::ensure!(
+        args.allow_insecure_certify,
+        "refusing certify flow over insecure transport: enable TLS (https + --tls-ca-cert-pem) or pass --allow-insecure-certify to override"
+    );
+    eprintln!(
+        "WARNING: certify override enabled; running claim execute over insecure transport can produce unverifiable safety posture."
+    );
+    Ok(())
+}
+
+async fn connect_client(args: &Args) -> anyhow::Result<DiscosClient> {
+    warn_if_insecure(args);
+    let tls = match &args.tls_ca_cert_pem {
+        Some(ca_path) => {
+            let ca_cert_pem = fs::read(ca_path)
+                .with_context(|| format!("read tls ca cert {}", ca_path.display()))?;
+            let client_cert_pem = match &args.tls_client_cert_pem {
+                Some(path) => Some(
+                    fs::read(path)
+                        .with_context(|| format!("read tls client cert {}", path.display()))?,
+                ),
+                None => None,
+            };
+            let client_key_pem = match &args.tls_client_key_pem {
+                Some(path) => Some(
+                    fs::read(path)
+                        .with_context(|| format!("read tls client key {}", path.display()))?,
+                ),
+                None => None,
+            };
+            Some(discos_client::ClientTlsOptions {
+                ca_cert_pem,
+                domain_name: args.tls_domain_name.clone(),
+                client_cert_pem,
+                client_key_pem,
+            })
+        }
+        None => {
+            anyhow::ensure!(
+                args.tls_client_cert_pem.is_none() && args.tls_client_key_pem.is_none(),
+                "--tls-client-cert-pem/--tls-client-key-pem require --tls-ca-cert-pem"
+            );
+            None
+        }
+    };
+
+    let auth = match (&args.bearer_token, &args.hmac_key_id, &args.hmac_secret_hex) {
+        (Some(_), Some(_), _) => anyhow::bail!("choose either bearer auth or hmac auth, not both"),
+        (Some(token), None, None) => Some(discos_client::ClientAuth::BearerToken(token.clone())),
+        (None, Some(key_id), Some(secret_hex)) => Some(discos_client::ClientAuth::HmacSha256 {
+            key_id: key_id.clone(),
+            secret: hex_decode_bytes(secret_hex).context("invalid --hmac-secret-hex")?,
+        }),
+        (None, Some(_), None) | (None, None, Some(_)) => {
+            anyhow::bail!("hmac auth requires both --hmac-key-id and --hmac-secret-hex")
+        }
+        (Some(_), None, Some(_)) => anyhow::bail!("cannot combine --bearer-token with hmac auth"),
+        (None, None, None) => None,
+    };
+
+    DiscosClient::connect_with_config(discos_client::ClientConnectConfig {
+        endpoint: args.endpoint.clone(),
+        tls,
+        auth,
+    })
+    .await
+    .map_err(|e| anyhow!(e))
 }
 
 fn cache_dir() -> PathBuf {
@@ -464,6 +577,15 @@ async fn run_scenario_live(
     spec: &ScenarioSpec,
     verify_etl: bool,
 ) -> anyhow::Result<ScenarioRun> {
+    if !endpoint.starts_with("https://") {
+        eprintln!(
+            "WARNING: insecure transport: scenario run endpoint={} is not TLS-protected.",
+            endpoint
+        );
+        eprintln!(
+            "WARNING: unauthenticated connection: scenario runner does not attach auth by default."
+        );
+    }
     let mut client =
         pb::evidence_os_client::EvidenceOsClient::connect(endpoint.to_string()).await?;
     let mut exchanges = Vec::new();
@@ -659,7 +781,7 @@ async fn main() -> anyhow::Result<()> {
 
     match args.cmd {
         Command::Health => {
-            let mut client = DiscosClient::connect(&args.endpoint).await?;
+            let mut client = connect_client(&args).await?;
             assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
             let health = client.health().await?;
             println!("{}", serde_json::json!({"status": health.status}));
@@ -744,7 +866,7 @@ async fn main() -> anyhow::Result<()> {
         },
 
         Command::ServerInfo => {
-            let mut client = DiscosClient::connect(&args.endpoint).await?;
+            let mut client = connect_client(&args).await?;
             assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
             let info = client.get_server_info().await?;
             println!(
@@ -897,7 +1019,7 @@ async fn main() -> anyhow::Result<()> {
                         .map_err(|e| anyhow!("failed to canonicalize cbrn claim: {e}"))?,
                 )?;
 
-                let mut client = DiscosClient::connect(&args.endpoint).await?;
+                let mut client = connect_client(&args).await?;
                 assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
                 let resp = client
                     .create_claim_v2(pb::CreateClaimV2Request {
@@ -959,7 +1081,7 @@ async fn main() -> anyhow::Result<()> {
                         })
                     })
                     .collect::<anyhow::Result<Vec<_>>>()?;
-                let mut client = DiscosClient::connect(&args.endpoint).await?;
+                let mut client = connect_client(&args).await?;
                 assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
                 let claim_id_bytes = hex_decode_bytes(&claim_id)?;
                 let artifacts = client
@@ -981,7 +1103,7 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
             ClaimCommand::Freeze { claim_id } => {
-                let mut client = DiscosClient::connect(&args.endpoint).await?;
+                let mut client = connect_client(&args).await?;
                 assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
                 let resp = client
                     .freeze(pb::FreezeRequest {
@@ -991,7 +1113,8 @@ async fn main() -> anyhow::Result<()> {
                 println!("{}", serde_json::json!({"frozen": resp.frozen}));
             }
             ClaimCommand::Execute { claim_id } => {
-                let mut client = DiscosClient::connect(&args.endpoint).await?;
+                ensure_certify_transport_security(&args)?;
+                let mut client = connect_client(&args).await?;
                 assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
                 let resp = client
                     .execute_claim_v2(pb::ExecuteClaimV2Request {
@@ -1008,7 +1131,7 @@ async fn main() -> anyhow::Result<()> {
                 verify_etl,
                 print_capsule_json,
             } => {
-                let mut client = DiscosClient::connect(&args.endpoint).await?;
+                let mut client = connect_client(&args).await?;
                 assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
                 let resp = client
                     .fetch_capsule(pb::FetchCapsuleRequest {
@@ -1124,7 +1247,7 @@ async fn main() -> anyhow::Result<()> {
             }
         },
         Command::WatchRevocations => {
-            let mut client = DiscosClient::connect(&args.endpoint).await?;
+            let mut client = connect_client(&args).await?;
             assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
             let mut stream = client
                 .watch_revocations(pb::WatchRevocationsRequest {})
@@ -1262,5 +1385,39 @@ feed"
         let specs = load_scenarios(dir.path()).expect("load specs");
         assert_eq!(specs.len(), 1);
         assert_eq!(specs[0].id, "s1");
+    }
+
+    #[test]
+    fn transport_security_detection_matches_endpoint_and_tls_flags() {
+        assert!(!transport_is_secure("http://127.0.0.1:50051", None));
+        assert!(transport_is_secure("https://example.test:50051", None));
+        assert!(transport_is_secure(
+            "http://127.0.0.1:50051",
+            Some(Path::new("ca.pem"))
+        ));
+    }
+
+    #[test]
+    fn certify_flow_requires_secure_transport_without_override() {
+        let insecure_args = Args {
+            endpoint: "http://127.0.0.1:50051".to_string(),
+            tls_ca_cert_pem: None,
+            tls_domain_name: None,
+            tls_client_cert_pem: None,
+            tls_client_key_pem: None,
+            bearer_token: None,
+            hmac_key_id: None,
+            hmac_secret_hex: None,
+            allow_insecure_certify: false,
+            log: "info".to_string(),
+            kernel_pubkey_hex: "".to_string(),
+            allow_protocol_drift: false,
+            cmd: Command::Health,
+        };
+        assert!(ensure_certify_transport_security(&insecure_args).is_err());
+
+        let mut override_args = insecure_args;
+        override_args.allow_insecure_certify = true;
+        assert!(ensure_certify_transport_security(&override_args).is_ok());
     }
 }
