@@ -262,13 +262,12 @@ impl pb::evidence_os_server::EvidenceOs for SwarmDaemon {
         _: Request<pb::GetServerInfoRequest>,
     ) -> Result<Response<pb::GetServerInfoResponse>, Status> {
         Ok(Response::new(pb::GetServerInfoResponse {
-            proto_hash: "swarm-proto-hash".into(),
-            protocol_package: "evidenceos.v1".into(),
-            git_commit: "local".into(),
-            build_timestamp: "local".into(),
-            key_ids: vec!["local".into()],
-            compatibility_min_rev: "local".into(),
-            compatibility_max_rev: "local".into(),
+            protocol_semver: evidenceos_protocol::PROTOCOL_SEMVER.into(),
+            proto_hash: evidenceos_protocol::PROTO_SHA256.into(),
+            build_git_commit: "local".into(),
+            build_time_utc: "local".into(),
+            daemon_version: "evidenceosd/local".into(),
+            feature_flags: vec!["tls_enabled".into()],
         }))
     }
 }

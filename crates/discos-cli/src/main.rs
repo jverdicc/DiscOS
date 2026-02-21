@@ -46,8 +46,6 @@ use tonic::Code;
 use tracing_subscriber::EnvFilter;
 
 const CACHE_FILE_NAME: &str = "sth_cache.json";
-const DEFAULT_EVIDENCEOS_REV: &str = "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af";
-const EXPECTED_PROTOCOL_PACKAGE: &str = "evidenceos.v2";
 const DEFAULT_ORACLE_ID: &str = "default";
 const MAX_ORACLE_ID_LEN: usize = 128;
 
@@ -72,6 +70,8 @@ struct Args {
     log: String,
     #[arg(long, env = "DISCOS_KERNEL_PUBKEY_HEX", default_value = "")]
     kernel_pubkey_hex: String,
+    #[arg(long, default_value_t = false)]
+    allow_protocol_drift: bool,
     #[command(subcommand)]
     cmd: Command,
 }
@@ -584,43 +584,50 @@ async fn run_scenario_live(
 }
 
 fn expected_proto_hash() -> String {
-    hex_encode(&sha256(evidenceos_protocol::FILE_DESCRIPTOR_SET))
+    evidenceos_protocol::PROTO_SHA256.to_string()
 }
 
-fn expected_evidenceos_rev() -> String {
-    std::env::var("EVIDENCEOS_REV").unwrap_or_else(|_| DEFAULT_EVIDENCEOS_REV.to_string())
+fn expected_protocol_semver() -> String {
+    evidenceos_protocol::PROTOCOL_SEMVER.to_string()
 }
 
-fn compatibility_error_json(
-    server: &pb::GetServerInfoResponse,
-    expected_rev: &str,
-) -> serde_json::Value {
+fn major_version(semver: &str) -> Option<&str> {
+    semver.split('.').next().filter(|major| !major.is_empty())
+}
+
+fn compatibility_error_json(server: &pb::GetServerInfoResponse) -> serde_json::Value {
     serde_json::json!({
         "error": "incompatible_daemon",
-        "expected_rev": expected_rev,
-        "expected_protocol_package": EXPECTED_PROTOCOL_PACKAGE,
+        "expected_protocol_semver": expected_protocol_semver(),
         "expected_proto_hash": expected_proto_hash(),
         "server": {
+            "protocol_semver": server.protocol_semver,
             "proto_hash": server.proto_hash,
-            "protocol_package": server.protocol_package,
-            "git_commit": server.git_commit,
-            "compatibility_min_rev": server.compatibility_min_rev,
-            "compatibility_max_rev": server.compatibility_max_rev
+            "build_git_commit": server.build_git_commit,
+            "build_time_utc": server.build_time_utc,
+            "daemon_version": server.daemon_version,
+            "feature_flags": server.feature_flags
         }
     })
 }
 
-fn is_server_compatible(server: &pb::GetServerInfoResponse, expected_rev: &str) -> bool {
-    let package_ok = server.protocol_package == EXPECTED_PROTOCOL_PACKAGE;
+fn is_server_compatible(server: &pb::GetServerInfoResponse) -> bool {
+    let expected_semver = expected_protocol_semver();
+    let major_ok = major_version(&server.protocol_semver) == major_version(&expected_semver);
     let hash_ok = server.proto_hash == expected_proto_hash();
-    let rev_ok = if !server.compatibility_min_rev.is_empty()
-        && !server.compatibility_max_rev.is_empty()
-    {
-        expected_rev == server.compatibility_min_rev || expected_rev == server.compatibility_max_rev
-    } else {
-        server.git_commit == expected_rev
-    };
-    package_ok && hash_ok && rev_ok
+    major_ok && hash_ok
+}
+
+async fn assert_server_compatibility(
+    client: &mut DiscosClient,
+    allow_drift: bool,
+) -> anyhow::Result<()> {
+    let info = client.get_server_info().await?;
+    if !allow_drift && !is_server_compatible(&info) {
+        println!("{}", compatibility_error_json(&info));
+        std::process::exit(2);
+    }
+    Ok(())
 }
 
 fn load_scenarios(dir: &Path) -> anyhow::Result<Vec<ScenarioSpec>> {
@@ -653,6 +660,7 @@ async fn main() -> anyhow::Result<()> {
     match args.cmd {
         Command::Health => {
             let mut client = DiscosClient::connect(&args.endpoint).await?;
+            assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
             let health = client.health().await?;
             println!("{}", serde_json::json!({"status": health.status}));
         }
@@ -737,23 +745,20 @@ async fn main() -> anyhow::Result<()> {
 
         Command::ServerInfo => {
             let mut client = DiscosClient::connect(&args.endpoint).await?;
+            assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
             let info = client.get_server_info().await?;
-            let expected_rev = expected_evidenceos_rev();
-            if !is_server_compatible(&info, &expected_rev) {
-                println!("{}", compatibility_error_json(&info, &expected_rev));
-                std::process::exit(2);
-            }
             println!(
                 "{}",
                 serde_json::json!({
+                    "protocol_semver": info.protocol_semver,
                     "proto_hash": info.proto_hash,
-                    "protocol_package": info.protocol_package,
-                    "git_commit": info.git_commit,
-                    "build_timestamp": info.build_timestamp,
-                    "key_ids": info.key_ids,
-                    "compatibility_min_rev": info.compatibility_min_rev,
-                    "compatibility_max_rev": info.compatibility_max_rev,
-                    "expected_rev": expected_rev
+                    "build_git_commit": info.build_git_commit,
+                    "build_time_utc": info.build_time_utc,
+                    "daemon_version": info.daemon_version,
+                    "feature_flags": info.feature_flags,
+                    "expected_protocol_semver": expected_protocol_semver(),
+                    "expected_proto_hash": expected_proto_hash(),
+                    "allow_protocol_drift": args.allow_protocol_drift
                 })
             );
         }
@@ -893,6 +898,7 @@ async fn main() -> anyhow::Result<()> {
                 )?;
 
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
+                assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
                 let resp = client
                     .create_claim_v2(pb::CreateClaimV2Request {
                         claim_name: claim_name.clone(),
@@ -954,6 +960,7 @@ async fn main() -> anyhow::Result<()> {
                     })
                     .collect::<anyhow::Result<Vec<_>>>()?;
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
+                assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
                 let claim_id_bytes = hex_decode_bytes(&claim_id)?;
                 let artifacts = client
                     .commit_artifacts(pb::CommitArtifactsRequest {
@@ -975,6 +982,7 @@ async fn main() -> anyhow::Result<()> {
             }
             ClaimCommand::Freeze { claim_id } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
+                assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
                 let resp = client
                     .freeze(pb::FreezeRequest {
                         claim_id: hex_decode_bytes(&claim_id)?,
@@ -984,6 +992,7 @@ async fn main() -> anyhow::Result<()> {
             }
             ClaimCommand::Execute { claim_id } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
+                assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
                 let resp = client
                     .execute_claim_v2(pb::ExecuteClaimV2Request {
                         claim_id: hex_decode_bytes(&claim_id)?,
@@ -1000,6 +1009,7 @@ async fn main() -> anyhow::Result<()> {
                 print_capsule_json,
             } => {
                 let mut client = DiscosClient::connect(&args.endpoint).await?;
+                assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
                 let resp = client
                     .fetch_capsule(pb::FetchCapsuleRequest {
                         claim_id: hex_decode_bytes(&claim_id)?,
@@ -1115,6 +1125,7 @@ async fn main() -> anyhow::Result<()> {
         },
         Command::WatchRevocations => {
             let mut client = DiscosClient::connect(&args.endpoint).await?;
+            assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
             let mut stream = client
                 .watch_revocations(pb::WatchRevocationsRequest {})
                 .await?;
@@ -1229,15 +1240,14 @@ feed"
     #[test]
     fn compatibility_guard_rejects_wrong_proto_hash() {
         let info = pb::GetServerInfoResponse {
+            protocol_semver: expected_protocol_semver(),
             proto_hash: "deadbeef".into(),
-            protocol_package: EXPECTED_PROTOCOL_PACKAGE.into(),
-            git_commit: DEFAULT_EVIDENCEOS_REV.into(),
-            build_timestamp: "2026-01-01T00:00:00Z".into(),
-            key_ids: vec!["k1".into()],
-            compatibility_min_rev: DEFAULT_EVIDENCEOS_REV.into(),
-            compatibility_max_rev: DEFAULT_EVIDENCEOS_REV.into(),
+            build_git_commit: "abc123".into(),
+            build_time_utc: "2026-01-01T00:00:00Z".into(),
+            daemon_version: "evidenceosd/2.1.0".into(),
+            feature_flags: vec!["tls_enabled".into()],
         };
-        assert!(!is_server_compatible(&info, DEFAULT_EVIDENCEOS_REV));
+        assert!(!is_server_compatible(&info));
     }
 
     #[test]
