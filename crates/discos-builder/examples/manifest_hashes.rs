@@ -12,16 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use discos_builder::{manifest_hash, AlphaHIRManifest};
+use discos_builder::{manifest_hash, AlphaHIRManifest, VAULT_IMPORT_ORACLE_QUERY};
 
 fn main() {
     let manifest = AlphaHIRManifest {
         plan_id: "example-plan".into(),
         code_hash_hex: "00".repeat(32),
-        oracle_kinds: vec!["oracle_query".into()],
+        oracle_kinds: vec![VAULT_IMPORT_ORACLE_QUERY.into()],
         output_schema_id: "cbrn-sc.v1".into(),
         nullspec_id: "nullspec.v1".into(),
     };
     let hash = manifest_hash(&manifest).expect("manifest hash");
-    println!("manifest_hash={:02x?}", hash);
+    print!("manifest_hash=");
+    for byte in hash {
+        print!("{byte:02x}");
+    }
+    println!();
 }
