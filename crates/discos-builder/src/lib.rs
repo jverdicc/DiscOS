@@ -33,6 +33,10 @@ pub const VAULT_IMPORT_MODULE: &str = guest_abi::VAULT_IMPORT_MODULE;
 pub const VAULT_IMPORT_ORACLE_QUERY: &str = guest_abi::VAULT_IMPORT_ORACLE_QUERY;
 pub const VAULT_IMPORT_EMIT_STRUCTURED_CLAIM: &str = guest_abi::VAULT_IMPORT_EMIT_STRUCTURED_CLAIM;
 pub const VAULT_IMPORT_GET_LOGICAL_EPOCH: &str = guest_abi::VAULT_IMPORT_GET_LOGICAL_EPOCH;
+pub const GUEST_EXPORT_RUN: &str = guest_abi::GUEST_EXPORT_RUN;
+pub const GUEST_EXPORT_MEMORY: &str = guest_abi::GUEST_EXPORT_MEMORY;
+
+pub use manifest::canonical_json_string as canonical_json;
 
 pub fn sha256(input: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
@@ -105,8 +109,8 @@ pub fn build_restricted_wasm_with_payload(payload: &[u8]) -> WasmBuildOutput {
     module.section(&memories);
 
     let mut exports = ExportSection::new();
-    exports.export("run", ExportKind::Func, 3);
-    exports.export("memory", ExportKind::Memory, 0);
+    exports.export(GUEST_EXPORT_RUN, ExportKind::Func, 3);
+    exports.export(GUEST_EXPORT_MEMORY, ExportKind::Memory, 0);
     module.section(&exports);
 
     let mut data = DataSection::new();
@@ -161,13 +165,9 @@ pub struct CausalDSLManifest {
     pub adjustment_sets: Vec<Vec<String>>,
 }
 
-pub fn canonical_json<T: Serialize>(value: &T) -> Result<String, serde_json::Error> {
-    manifest::canonical_json_string(value)
-}
-
 pub fn manifest_hash<T: Serialize>(value: &T) -> Result<[u8; 32], serde_json::Error> {
-    let canonical = canonical_json(value)?;
-    Ok(hash32(DOMAIN_MANIFEST_HASH, canonical.as_bytes()))
+    let canonical = manifest::canonical_json_bytes(value)?;
+    Ok(hash32(DOMAIN_MANIFEST_HASH, &canonical))
 }
 
 #[cfg(test)]
@@ -231,20 +231,26 @@ mod tests {
         assert_eq!(memories, 1);
         assert!(exports
             .iter()
-            .any(|(n, k)| n == "run" && *k == ExternalKind::Func));
+            .any(|(n, k)| n == GUEST_EXPORT_RUN && *k == ExternalKind::Func));
         assert!(exports
             .iter()
-            .any(|(n, k)| n == "memory" && *k == ExternalKind::Memory));
+            .any(|(n, k)| n == GUEST_EXPORT_MEMORY && *k == ExternalKind::Memory));
 
         assert!(imports
             .iter()
-            .any(|(m, n, is_func)| m == "env" && n == "oracle_query" && *is_func));
+            .any(|(m, n, is_func)| m == VAULT_IMPORT_MODULE
+                && n == VAULT_IMPORT_ORACLE_QUERY
+                && *is_func));
         assert!(imports
             .iter()
-            .any(|(m, n, is_func)| m == "env" && n == "emit_structured_claim" && *is_func));
+            .any(|(m, n, is_func)| m == VAULT_IMPORT_MODULE
+                && n == VAULT_IMPORT_EMIT_STRUCTURED_CLAIM
+                && *is_func));
         assert!(imports
             .iter()
-            .any(|(m, n, is_func)| m == "env" && n == "get_logical_epoch" && *is_func));
+            .any(|(m, n, is_func)| m == VAULT_IMPORT_MODULE
+                && n == VAULT_IMPORT_GET_LOGICAL_EPOCH
+                && *is_func));
 
         for (module, name, _) in imports {
             assert_eq!(module, VAULT_IMPORT_MODULE);
@@ -257,10 +263,27 @@ mod tests {
         }
         for (name, kind) in exports {
             match (name.as_str(), kind) {
-                ("run", ExternalKind::Func) | ("memory", ExternalKind::Memory) => {}
+                (GUEST_EXPORT_RUN, ExternalKind::Func)
+                | (GUEST_EXPORT_MEMORY, ExternalKind::Memory) => {}
                 _ => panic!("unexpected export"),
             }
         }
+    }
+
+    #[test]
+    fn manifest_hash_is_stable_for_known_manifest() {
+        let manifest = AlphaHIRManifest {
+            plan_id: "example-plan".into(),
+            code_hash_hex: "00".repeat(32),
+            oracle_kinds: vec![VAULT_IMPORT_ORACLE_QUERY.into()],
+            output_schema_id: "cbrn-sc.v1".into(),
+            nullspec_id: "nullspec.v1".into(),
+        };
+
+        assert_eq!(
+            hex::encode(manifest_hash(&manifest).expect("manifest hash")),
+            "0a4f0f3ec1f7f43d347ec4f6f6209f26455d0b2f30d16cd11f33ed9f0e91ef99"
+        );
     }
 
     proptest! {
