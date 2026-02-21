@@ -4,17 +4,34 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "langchain-evidenceos"
-version = "0.1.0"
+version = "0.2.0"
 description = "LangChain callback handler that gates tool calls via EvidenceOS preflight."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "DiscOS Contributors" }]
+keywords = ["langchain", "evidenceos", "policy", "safety", "agent"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+  "Typing :: Typed",
+]
 dependencies = []
 
 [project.optional-dependencies]
 langchain = ["langchain-core>=0.2.0"]
 test = ["pytest>=8.0.0"]
+
+[project.urls]
+Homepage = "https://github.com/discos-project/DiscOS"
+Repository = "https://github.com/discos-project/DiscOS"
+Issues = "https://github.com/discos-project/DiscOS/issues"
 
 [tool.setuptools]
 package-dir = { "" = "." }

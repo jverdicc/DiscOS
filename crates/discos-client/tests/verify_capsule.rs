@@ -17,7 +17,7 @@ use discos_client::{
     verify_sth_signature, InclusionProof, SignedTreeHead,
 };
 use ed25519_dalek::{Signer, SigningKey};
-use evidenceos_core::crypto_transcripts;
+use evidenceos_verifier as verifier;
 
 fn ref_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
     let mut bytes = Vec::with_capacity(65);
@@ -101,7 +101,7 @@ fn tampered_audit_node_fails_inclusion() {
 #[test]
 fn tampered_signature_fails_sth_verification() {
     let sk = SigningKey::from_bytes(&[3u8; 32]);
-    let digest = crypto_transcripts::sth_signature_digest(5, [8u8; 32]);
+    let digest = verifier::sth_signature_digest(5, [8u8; 32]);
     let sig = sk.sign(&digest);
 
     let mut sth = SignedTreeHead {

@@ -1,0 +1,106 @@
+{
+  "rows": [
+    {
+      "n_identities": 1,
+      "naive_success_prob": 1.9073486328125e-06,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 2,
+      "naive_success_prob": 3.814697265625e-06,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 3,
+      "naive_success_prob": 7.62939453125e-06,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 4,
+      "naive_success_prob": 1.52587890625e-05,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 5,
+      "naive_success_prob": 3.0517578125e-05,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 6,
+      "naive_success_prob": 6.103515625e-05,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 7,
+      "naive_success_prob": 0.0001220703125,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 8,
+      "naive_success_prob": 0.000244140625,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 9,
+      "naive_success_prob": 0.00048828125,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 10,
+      "naive_success_prob": 0.0009765625,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 11,
+      "naive_success_prob": 0.001953125,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 12,
+      "naive_success_prob": 0.00390625,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 13,
+      "naive_success_prob": 0.0078125,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 14,
+      "naive_success_prob": 0.015625,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 15,
+      "naive_success_prob": 0.03125,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 16,
+      "naive_success_prob": 0.0625,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 17,
+      "naive_success_prob": 0.125,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 18,
+      "naive_success_prob": 0.25,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 19,
+      "naive_success_prob": 0.5,
+      "topichash_success_prob": 3.814697265625e-06
+    },
+    {
+      "n_identities": 20,
+      "naive_success_prob": 1.0,
+      "topichash_success_prob": 3.814697265625e-06
+    }
+  ],
+  "schema_version": "discos.paper.exp11.v1",
+  "seed": 1011
+}

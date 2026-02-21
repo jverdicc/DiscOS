@@ -4,6 +4,16 @@ This folder contains test evidence, scenario fixtures, and threat-model explaine
 
 ## Start here
 
+## Blackbox worked example (outsider-readable)
+
+Treat EvidenceOS as a guarded service you call through DiscOS.
+
+- **Inputs (tool calls / queries):** a caller submits lifecycle calls (`CreateClaim`, artifact commits, `Execute`) and may issue repeated adaptive queries.
+- **EvidenceOS behavior over time:** the service meters leakage budget across the sequence, quantizes outputs, and moves to `throttle` or `freeze`/defer when policy limits are reached.
+- **Outputs (what a user sees):** users see bounded responses while budget remains, then explicit throttled/frozen outcomes plus capsule + ETL receipt evidence for audit.
+
+For deeper context, see the [threat model walkthrough](threat_model_worked_example.md), [UVP blackbox interface](uvp_blackbox_interface.md), and [Threat Model (Blackbox Walkthrough)](THREAT_MODEL_BLACKBOX.md) (Figure 1 analog for trust-boundary flow).
+
 - [Start here: threat model walkthrough](threat_model_worked_example.md)
 - [Threat Model (Blackbox Walkthrough)](THREAT_MODEL_BLACKBOX.md) — outsider-friendly narrative of baseline leakage vs EvidenceOS controls.
 - [Test Coverage Matrix](TEST_COVERAGE_MATRIX.md) — mapping of guarantees to tests.

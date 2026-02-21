@@ -19,7 +19,7 @@ use discos_client::{
     InclusionProof, SignedTreeHead,
 };
 use ed25519_dalek::{Signer, SigningKey};
-use evidenceos_core::crypto_transcripts;
+use evidenceos_verifier as verifier;
 use sha2::Digest;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -101,12 +101,12 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
             "structured_output_hash_hex": hex::encode(sha2::Sha256::digest(b"{}")),
         }))
         .map_err(|e| Status::internal(e.to_string()))?;
-        let leaf = crypto_transcripts::etl_leaf_hash(&capsule);
+        let leaf = verifier::etl_leaf_hash(&capsule);
         let mut st = self.0.lock().await;
         st.root = leaf;
         st.sig = st
             .signing_key
-            .sign(&crypto_transcripts::sth_signature_digest(1, st.root))
+            .sign(&verifier::sth_signature_digest(1, st.root))
             .to_bytes();
         Ok(Response::new(pb::FetchCapsuleResponse {
             claim_id,
@@ -281,13 +281,20 @@ async fn e2e_v2_daemon_contract_verification() {
         signature: f.sth_signature.clone().try_into().expect("sig len"),
     };
     verify_sth_signature(&sth, &key.pubkey).expect("sig verify");
-    assert!(verify_inclusion(
+    let inclusion = InclusionProof {
+        leaf_hash: verifier::etl_leaf_hash(&f.capsule),
+        leaf_index: 0,
+        tree_size: 1,
+        audit_path: vec![],
+    };
+    assert!(verify_inclusion(sth.root_hash, &inclusion));
+    assert!(verifier::verify_inclusion_proof(
         sth.root_hash,
-        &InclusionProof {
-            leaf_hash: [3u8; 32],
-            leaf_index: 0,
-            tree_size: 1,
-            audit_path: vec![]
+        &verifier::InclusionProof {
+            leaf_hash: inclusion.leaf_hash,
+            leaf_index: inclusion.leaf_index,
+            tree_size: inclusion.tree_size,
+            audit_path: inclusion.audit_path.clone(),
         }
     ));
     assert!(verify_consistency(

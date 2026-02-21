@@ -23,7 +23,7 @@ use std::sync::{
 };
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use evidenceos_core::crypto_transcripts;
+use evidenceos_verifier as verifier;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -33,8 +33,6 @@ use tonic::{
     transport::{Certificate, Channel, ClientTlsConfig, Endpoint, Identity},
     Request, Status,
 };
-
-const MAX_MERKLE_PATH_LEN: usize = 64;
 
 pub mod pb {
     pub use evidenceos_protocol::pb::v2::*;
@@ -484,7 +482,7 @@ pub fn sha256_domain(domain: &[u8], payload: &[u8]) -> [u8; 32] {
 }
 
 pub fn merkle_leaf_hash(payload: &[u8]) -> [u8; 32] {
-    crypto_transcripts::etl_leaf_hash(payload)
+    verifier::etl_leaf_hash(payload)
 }
 
 fn merkle_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
@@ -496,37 +494,13 @@ fn merkle_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
 }
 
 pub fn verify_inclusion_proof(root: [u8; 32], proof: &InclusionProof) -> bool {
-    if proof.tree_size == 0 || proof.leaf_index >= proof.tree_size {
-        return false;
-    }
-    if proof.audit_path.len() > MAX_MERKLE_PATH_LEN {
-        return false;
-    }
-
-    let mut fn_idx = proof.leaf_index;
-    let mut sn_idx = proof.tree_size - 1;
-    let mut hash = proof.leaf_hash;
-
-    for sibling in &proof.audit_path {
-        if sn_idx == 0 {
-            return false;
-        }
-
-        if (fn_idx & 1) == 1 || fn_idx == sn_idx {
-            hash = merkle_node_hash(*sibling, hash);
-            while fn_idx != 0 && (fn_idx & 1) == 0 {
-                fn_idx >>= 1;
-                sn_idx >>= 1;
-            }
-        } else {
-            hash = merkle_node_hash(hash, *sibling);
-        }
-
-        fn_idx >>= 1;
-        sn_idx >>= 1;
-    }
-
-    sn_idx == 0 && hash == root
+    let proof = verifier::InclusionProof {
+        leaf_hash: proof.leaf_hash,
+        leaf_index: proof.leaf_index,
+        tree_size: proof.tree_size,
+        audit_path: proof.audit_path.clone(),
+    };
+    verifier::verify_inclusion_proof(root, &proof)
 }
 
 pub fn verify_consistency_proof(
@@ -534,51 +508,12 @@ pub fn verify_consistency_proof(
     new_root: [u8; 32],
     proof: &ConsistencyProof,
 ) -> bool {
-    if proof.old_tree_size == 0 {
-        return true;
-    }
-    if proof.old_tree_size > proof.new_tree_size {
-        return false;
-    }
-    if proof.old_tree_size == proof.new_tree_size {
-        return proof.path.is_empty() && old_root == new_root;
-    }
-    if proof.path.is_empty() || proof.path.len() > MAX_MERKLE_PATH_LEN {
-        return false;
-    }
-
-    let mut fn_idx = proof.old_tree_size - 1;
-    let mut sn_idx = proof.new_tree_size - 1;
-
-    while fn_idx & 1 == 1 {
-        fn_idx >>= 1;
-        sn_idx >>= 1;
-    }
-
-    let mut fr = proof.path[0];
-    let mut sr = proof.path[0];
-
-    for p in &proof.path[1..] {
-        if sn_idx == 0 {
-            return false;
-        }
-
-        if (fn_idx & 1) == 1 || fn_idx == sn_idx {
-            fr = merkle_node_hash(*p, fr);
-            sr = merkle_node_hash(*p, sr);
-            while fn_idx != 0 && (fn_idx & 1) == 0 {
-                fn_idx >>= 1;
-                sn_idx >>= 1;
-            }
-        } else {
-            sr = merkle_node_hash(sr, *p);
-        }
-
-        fn_idx >>= 1;
-        sn_idx >>= 1;
-    }
-
-    fr == old_root && sr == new_root
+    let proof = verifier::ConsistencyProof {
+        old_tree_size: proof.old_tree_size,
+        new_tree_size: proof.new_tree_size,
+        path: proof.path.clone(),
+    };
+    verifier::verify_consistency_proof(old_root, new_root, &proof)
 }
 
 pub fn verify_capsule_response(
@@ -596,7 +531,7 @@ pub fn verify_capsule_response(
         expected_topic_id,
     )?;
 
-    let capsule_hash = crypto_transcripts::etl_leaf_hash(&response.capsule);
+    let capsule_hash = verifier::etl_leaf_hash(&response.capsule);
 
     let inclusion = response
         .inclusion
@@ -684,16 +619,14 @@ pub fn verify_consistency(
 }
 
 pub fn verify_sth_signature(sth: &SignedTreeHead, kernel_pubkey: &[u8]) -> Result<(), ClientError> {
-    let core_sth = crypto_transcripts::SignedTreeHead {
+    let core_sth = verifier::SignedTreeHead {
         tree_size: sth.tree_size,
         root_hash: sth.root_hash,
         signature: sth.signature,
     };
-    crypto_transcripts::verify_sth_signature(&core_sth, kernel_pubkey).map_err(|e| match e {
-        crypto_transcripts::CryptoTranscriptError::InvalidInput(msg) => {
-            ClientError::InvalidInput(msg)
-        }
-        crypto_transcripts::CryptoTranscriptError::VerificationFailed(msg) => {
+    verifier::verify_sth_signature(&core_sth, kernel_pubkey).map_err(|e| match e {
+        verifier::VerificationError::InvalidInput(msg) => ClientError::InvalidInput(msg),
+        verifier::VerificationError::VerificationFailed(msg) => {
             ClientError::VerificationFailed(msg)
         }
     })
@@ -718,13 +651,13 @@ pub fn verify_revocation_signature(
 
     let signature = Signature::from_bytes(&revocation.signature);
 
-    let entry = crypto_transcripts::RevocationEntry {
+    let entry = verifier::RevocationEntry {
         claim_id: revocation.claim_id.clone(),
         reason_code: revocation.reason_code.clone(),
         logical_epoch: revocation.logical_epoch,
         signature: revocation.signature,
     };
-    let sign_bytes = crypto_transcripts::revocation_entry_digest(&entry);
+    let sign_bytes = verifier::revocation_entry_digest(&entry);
 
     pubkey
         .verify(&sign_bytes, &signature)
@@ -850,7 +783,7 @@ mod tests {
     #[test]
     fn sth_signature_roundtrip_and_bit_flips() {
         let sk = SigningKey::from_bytes(&[7u8; 32]);
-        let signed_bytes = crypto_transcripts::sth_signature_digest(7, [4u8; 32]);
+        let signed_bytes = verifier::sth_signature_digest(7, [4u8; 32]);
         let sig = sk.sign(&signed_bytes);
 
         let sth = SignedTreeHead {
@@ -970,13 +903,12 @@ mod tests {
     #[test]
     fn revocation_signature_roundtrip_and_tamper() {
         let sk = SigningKey::from_bytes(&[9u8; 32]);
-        let sign_bytes =
-            crypto_transcripts::revocation_entry_digest(&crypto_transcripts::RevocationEntry {
-                claim_id: b"claim".to_vec(),
-                reason_code: "expired".to_string(),
-                logical_epoch: 11,
-                signature: [0u8; 64],
-            });
+        let sign_bytes = verifier::revocation_entry_digest(&verifier::RevocationEntry {
+            claim_id: b"claim".to_vec(),
+            reason_code: "expired".to_string(),
+            logical_epoch: 11,
+            signature: [0u8; 64],
+        });
         let sig = sk.sign(&sign_bytes);
 
         let rev = SignedRevocation {

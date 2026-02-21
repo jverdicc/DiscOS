@@ -15,15 +15,7 @@
 use sha2::{Digest, Sha256};
 use std::{fs, path::Path};
 
-const MAX_MERKLE_PATH_LEN: usize = 64;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InclusionProof {
-    pub leaf_hash: [u8; 32],
-    pub leaf_index: u64,
-    pub tree_size: u64,
-    pub audit_path: Vec<[u8; 32]>,
-}
+pub type InclusionProof = evidenceos_verifier::InclusionProof;
 
 #[derive(Debug)]
 pub struct Etl {
@@ -50,14 +42,6 @@ fn merkle_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
     material.extend_from_slice(&left);
     material.extend_from_slice(&right);
     sha256(&material)
-}
-
-fn ct_eq(a: [u8; 32], b: [u8; 32]) -> bool {
-    let mut acc = 0u8;
-    for i in 0..32 {
-        acc |= a[i] ^ b[i];
-    }
-    acc == 0
 }
 
 impl Etl {
@@ -159,35 +143,5 @@ fn compute_audit_path(leaves: &[[u8; 32]], mut idx: usize) -> Vec<[u8; 32]> {
 }
 
 pub fn verify_inclusion_proof_ct(root: [u8; 32], proof: &InclusionProof) -> bool {
-    if proof.tree_size == 0 || proof.leaf_index >= proof.tree_size {
-        return false;
-    }
-    if proof.audit_path.len() > MAX_MERKLE_PATH_LEN {
-        return false;
-    }
-
-    let mut fn_idx = proof.leaf_index;
-    let mut sn_idx = proof.tree_size - 1;
-    let mut hash = proof.leaf_hash;
-
-    for sibling in &proof.audit_path {
-        if sn_idx == 0 {
-            return false;
-        }
-
-        if (fn_idx & 1) == 1 || fn_idx == sn_idx {
-            hash = merkle_node_hash(*sibling, hash);
-            while fn_idx != 0 && (fn_idx & 1) == 0 {
-                fn_idx >>= 1;
-                sn_idx >>= 1;
-            }
-        } else {
-            hash = merkle_node_hash(hash, *sibling);
-        }
-
-        fn_idx >>= 1;
-        sn_idx >>= 1;
-    }
-
-    sn_idx == 0 && ct_eq(hash, root)
+    evidenceos_verifier::verify_inclusion_proof(root, proof)
 }

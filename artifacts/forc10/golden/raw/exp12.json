@@ -1,0 +1,24 @@
+{
+  "rows": [
+    {
+      "mean_leaked_bits": 2.3234,
+      "n": 32,
+      "p99_leaked_bits": 4,
+      "psplit": 0.01
+    },
+    {
+      "mean_leaked_bits": 2.6387,
+      "n": 64,
+      "p99_leaked_bits": 5,
+      "psplit": 0.01
+    },
+    {
+      "mean_leaked_bits": 8.3872,
+      "n": 128,
+      "p99_leaked_bits": 15,
+      "psplit": 0.05
+    }
+  ],
+  "schema_version": "discos.paper.exp12.v1",
+  "seed": 1012
+}

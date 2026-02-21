@@ -1,4 +1,4 @@
-.PHONY: fmt lint test coverage-core coverage-client check-coverage-threshold-drift test-evidence demo-exfil-baseline demo-exfil-evidenceos-mock reproduce-paper
+.PHONY: fmt lint test coverage-core coverage-client check-coverage-threshold-drift test-evidence demo-exfil-baseline demo-exfil-evidenceos-mock reproduce-paper verify-forc10
 
 fmt:
 	cargo fmt --all --check
@@ -29,3 +29,6 @@ demo-exfil-evidenceos-mock:
 
 reproduce-paper:
 	python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts
+
+verify-forc10:
+	$(MAKE) -C artifacts/forc10 verify

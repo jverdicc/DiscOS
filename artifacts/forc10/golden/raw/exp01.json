@@ -1,0 +1,133 @@
+{
+  "effective_bits_no_hysteresis": 4.754887502163468,
+  "effective_bits_with_hysteresis": 3.181272389365359,
+  "rows": [
+    {
+      "mae_no_hysteresis": 0.3333333333333333,
+      "mae_with_hysteresis": 0.2928932188134525,
+      "queries": 1
+    },
+    {
+      "mae_no_hysteresis": 0.25,
+      "mae_with_hysteresis": 0.25,
+      "queries": 2
+    },
+    {
+      "mae_no_hysteresis": 0.2,
+      "mae_with_hysteresis": 0.22474487139158905,
+      "queries": 3
+    },
+    {
+      "mae_no_hysteresis": 0.16666666666666666,
+      "mae_with_hysteresis": 0.20710678118654754,
+      "queries": 4
+    },
+    {
+      "mae_no_hysteresis": 0.14285714285714285,
+      "mae_with_hysteresis": 0.19371294336139652,
+      "queries": 5
+    },
+    {
+      "mae_no_hysteresis": 0.125,
+      "mae_with_hysteresis": 0.18301270189221933,
+      "queries": 6
+    },
+    {
+      "mae_no_hysteresis": 0.1111111111111111,
+      "mae_with_hysteresis": 0.17416573867739416,
+      "queries": 7
+    },
+    {
+      "mae_no_hysteresis": 0.1,
+      "mae_with_hysteresis": 0.16666666666666666,
+      "queries": 8
+    },
+    {
+      "mae_no_hysteresis": 0.09090909090909091,
+      "mae_with_hysteresis": 0.16018862050852037,
+      "queries": 9
+    },
+    {
+      "mae_no_hysteresis": 0.08333333333333333,
+      "mae_with_hysteresis": 0.1545084971874737,
+      "queries": 10
+    },
+    {
+      "mae_no_hysteresis": 0.07692307692307693,
+      "mae_with_hysteresis": 0.14946754221241276,
+      "queries": 11
+    },
+    {
+      "mae_no_hysteresis": 0.07142857142857142,
+      "mae_with_hysteresis": 0.14494897427831782,
+      "queries": 12
+    },
+    {
+      "mae_no_hysteresis": 0.06666666666666667,
+      "mae_with_hysteresis": 0.14086452334512659,
+      "queries": 13
+    },
+    {
+      "mae_no_hysteresis": 0.0625,
+      "mae_with_hysteresis": 0.13714594258871587,
+      "queries": 14
+    },
+    {
+      "mae_no_hysteresis": 0.058823529411764705,
+      "mae_with_hysteresis": 0.13373944519429465,
+      "queries": 15
+    },
+    {
+      "mae_no_hysteresis": 0.05555555555555555,
+      "mae_with_hysteresis": 0.1306019374818707,
+      "queries": 16
+    },
+    {
+      "mae_no_hysteresis": 0.05263157894736842,
+      "mae_with_hysteresis": 0.12769839649484335,
+      "queries": 17
+    },
+    {
+      "mae_no_hysteresis": 0.05,
+      "mae_with_hysteresis": 0.125,
+      "queries": 18
+    },
+    {
+      "mae_no_hysteresis": 0.047619047619047616,
+      "mae_with_hysteresis": 0.1224827647932052,
+      "queries": 19
+    },
+    {
+      "mae_no_hysteresis": 0.045454545454545456,
+      "mae_with_hysteresis": 0.12012653667602105,
+      "queries": 20
+    },
+    {
+      "mae_no_hysteresis": 0.043478260869565216,
+      "mae_with_hysteresis": 0.11791422890547,
+      "queries": 21
+    },
+    {
+      "mae_no_hysteresis": 0.041666666666666664,
+      "mae_with_hysteresis": 0.11583123951777,
+      "queries": 22
+    },
+    {
+      "mae_no_hysteresis": 0.04,
+      "mae_with_hysteresis": 0.11386499959822066,
+      "queries": 23
+    },
+    {
+      "mae_no_hysteresis": 0.038461538461538464,
+      "mae_with_hysteresis": 0.11200461886989795,
+      "queries": 24
+    },
+    {
+      "mae_no_hysteresis": 0.037037037037037035,
+      "mae_with_hysteresis": 0.1102406046057712,
+      "queries": 25
+    }
+  ],
+  "schema_version": "discos.paper.exp01.v1",
+  "seed": 1001
+}
