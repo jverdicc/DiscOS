@@ -2,9 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use discos_client::{pb, verify_capsule_response, DiscosClient, SignedTreeHead};
 use ed25519_dalek::{Signer, SigningKey};
-use evidenceos_core::crypto_transcripts::{
-    self, revocation_entry_digest, verify_revocations_snapshot, RevocationEntry,
-};
+use evidenceos_verifier as verifier;
+use evidenceos_verifier::{revocation_entry_digest, verify_revocations_snapshot, RevocationEntry};
 use sha2::Digest;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -91,13 +90,13 @@ impl pb::evidence_os_server::EvidenceOs for GoldenDaemon {
             "structured_output_hash_hex": hex::encode(sha2::Sha256::digest(b"{}")),
         }))
         .map_err(|e| Status::internal(e.to_string()))?;
-        let leaf = crypto_transcripts::etl_leaf_hash(&capsule);
+        let leaf = verifier::etl_leaf_hash(&capsule);
 
         let mut st = self.0.lock().await;
         st.root = leaf;
         st.sig = st
             .signing_key
-            .sign(&crypto_transcripts::sth_signature_digest(1, st.root))
+            .sign(&verifier::sth_signature_digest(1, st.root))
             .to_bytes();
 
         Ok(Response::new(pb::FetchCapsuleResponse {
@@ -277,9 +276,9 @@ async fn golden_status_gate_integration_protocol_capsule_and_revocations() {
     rev_entry.signature = signer.sign(&revocation_entry_digest(&rev_entry)).to_bytes();
 
     let entries = vec![rev_entry.clone()];
-    let digest = crypto_transcripts::revocations_snapshot_digest(
+    let digest = verifier::revocations_snapshot_digest(
         &entries,
-        &crypto_transcripts::SignedTreeHead {
+        &verifier::SignedTreeHead {
             tree_size: sth.tree_size,
             root_hash: sth.root_hash,
             signature: sth.signature,
@@ -288,7 +287,7 @@ async fn golden_status_gate_integration_protocol_capsule_and_revocations() {
 
     assert!(verify_revocations_snapshot(
         &entries,
-        &crypto_transcripts::SignedTreeHead {
+        &verifier::SignedTreeHead {
             tree_size: sth.tree_size,
             root_hash: sth.root_hash,
             signature: sth.signature,
@@ -300,7 +299,7 @@ async fn golden_status_gate_integration_protocol_capsule_and_revocations() {
     tampered[0].logical_epoch += 1;
     assert!(!verify_revocations_snapshot(
         &tampered,
-        &crypto_transcripts::SignedTreeHead {
+        &verifier::SignedTreeHead {
             tree_size: sth.tree_size,
             root_hash: sth.root_hash,
             signature: sth.signature,

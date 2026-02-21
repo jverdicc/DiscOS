@@ -11,6 +11,7 @@ serde_json = "1"
 wasm-encoder = "0.220"
 sha2 = "0.10"
 evidenceos-core = { path = "../evidenceos-core" }
+evidenceos-verifier.workspace = true
 
 [dev-dependencies]
 wat = "1"

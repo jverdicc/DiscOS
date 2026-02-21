@@ -3,7 +3,7 @@ use std::sync::Arc;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use discos_client::{pb, DiscosClient};
 use ed25519_dalek::{Signer, SigningKey};
-use evidenceos_core::crypto_transcripts;
+use evidenceos_verifier as verifier;
 use serde::Serialize;
 use sha2::Digest;
 use tokio::runtime::Runtime;
@@ -86,10 +86,10 @@ impl pb::evidence_os_server::EvidenceOs for BenchDaemon {
         }))
         .map_err(|e| Status::internal(e.to_string()))?;
 
-        let leaf_hash = crypto_transcripts::etl_leaf_hash(&capsule);
+        let leaf_hash = verifier::etl_leaf_hash(&capsule);
         let sth_signature = self
             .signing_key
-            .sign(&crypto_transcripts::sth_signature_digest(1, leaf_hash))
+            .sign(&verifier::sth_signature_digest(1, leaf_hash))
             .to_bytes()
             .to_vec();
 
@@ -131,7 +131,7 @@ impl pb::evidence_os_server::EvidenceOs for BenchDaemon {
         let root_hash = [9u8; 32];
         let signature = self
             .signing_key
-            .sign(&crypto_transcripts::sth_signature_digest(1, root_hash))
+            .sign(&verifier::sth_signature_digest(1, root_hash))
             .to_bytes()
             .to_vec();
 

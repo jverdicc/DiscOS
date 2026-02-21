@@ -8,6 +8,7 @@ members = [
   "crates/discos-cli",
   "crates/discos-client",
   "crates/discos-builder",
+  "crates/evidenceos-verifier",
   "crates/evidenceos-core",
 ]
 
@@ -21,3 +22,4 @@ repository = "https://github.com/jverdicc/DiscOS"
 
 [workspace.dependencies]
 evidenceos-protocol = { git = "https://github.com/EvidenceOS/evidenceos.git", tag = "v2.1.0", package = "evidenceos-protocol" }
+evidenceos-verifier = { path = "crates/evidenceos-verifier", version = "0.1.0" }
