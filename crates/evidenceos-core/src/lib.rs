@@ -19,5 +19,8 @@
 
 pub mod crypto_transcripts;
 pub mod etl;
+pub mod guest_abi;
 pub mod ledger;
+pub mod manifest;
 pub mod topicid;
+pub mod wasm_aspec;

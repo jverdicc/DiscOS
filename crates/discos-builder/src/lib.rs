@@ -17,6 +17,7 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+use evidenceos_core::{guest_abi, manifest};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use wasm_encoder::{
@@ -28,10 +29,10 @@ const DOMAIN_WASM_HASH: &[u8] = b"evidenceos/wasm-code-hash/v1";
 const DOMAIN_MANIFEST_HASH: &[u8] = b"evidenceos/manifest-hash/v1";
 const PAYLOAD: &[u8] = &[0x01, 0x02, 0x03];
 
-pub const VAULT_IMPORT_MODULE: &str = "env";
-pub const VAULT_IMPORT_ORACLE_QUERY: &str = "oracle_query";
-pub const VAULT_IMPORT_EMIT_STRUCTURED_CLAIM: &str = "emit_structured_claim";
-pub const VAULT_IMPORT_GET_LOGICAL_EPOCH: &str = "get_logical_epoch";
+pub const VAULT_IMPORT_MODULE: &str = guest_abi::VAULT_IMPORT_MODULE;
+pub const VAULT_IMPORT_ORACLE_QUERY: &str = guest_abi::VAULT_IMPORT_ORACLE_QUERY;
+pub const VAULT_IMPORT_EMIT_STRUCTURED_CLAIM: &str = guest_abi::VAULT_IMPORT_EMIT_STRUCTURED_CLAIM;
+pub const VAULT_IMPORT_GET_LOGICAL_EPOCH: &str = guest_abi::VAULT_IMPORT_GET_LOGICAL_EPOCH;
 
 pub fn sha256(input: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
@@ -161,7 +162,7 @@ pub struct CausalDSLManifest {
 }
 
 pub fn canonical_json<T: Serialize>(value: &T) -> Result<String, serde_json::Error> {
-    serde_json::to_string(value)
+    manifest::canonical_json_string(value)
 }
 
 pub fn manifest_hash<T: Serialize>(value: &T) -> Result<[u8; 32], serde_json::Error> {
