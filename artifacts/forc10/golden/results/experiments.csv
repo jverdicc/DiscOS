@@ -1,0 +1,13 @@
+experiment,seed,schema_version,row_count
+1,1001,discos.paper.exp01.v1,25
+2,1002,discos.paper.exp02.v1,0
+3,1003,discos.paper.exp03.v1,32
+4,1004,discos.paper.exp04.v1,32
+5,1005,discos.paper.exp05.v1,32
+6,1006,discos.paper.exp06.v1,32
+7,1007,discos.paper.exp07.v1,32
+8,1008,discos.paper.exp08.v1,32
+9,1009,discos.paper.exp09.v1,32
+10,1010,discos.paper.exp10.v1,32
+11,1011,discos.paper.exp11.v1,20
+12,1012,discos.paper.exp12.v1,3

@@ -1,0 +1,8 @@
+{
+  "evidenceos_success_rate": 0.0,
+  "joint_budget_bits": 48.0,
+  "n_trials": 1000,
+  "schema_version": "discos.paper.exp02.v1",
+  "seed": 1002,
+  "standard_success_rate": 1.0
+}

@@ -1,0 +1,66 @@
+{
+  "experiments": {
+    "1": {
+      "artifact": "exp01.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 1",
+      "seed": 1001
+    },
+    "10": {
+      "artifact": "exp10.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 10",
+      "seed": 1010
+    },
+    "11": {
+      "artifact": "exp11.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 11",
+      "seed": 1011
+    },
+    "12": {
+      "artifact": "exp12.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 12",
+      "seed": 1012
+    },
+    "2": {
+      "artifact": "exp02.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 2",
+      "seed": 1002
+    },
+    "3": {
+      "artifact": "exp03.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 3",
+      "seed": 1003
+    },
+    "4": {
+      "artifact": "exp04.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 4",
+      "seed": 1004
+    },
+    "5": {
+      "artifact": "exp05.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 5",
+      "seed": 1005
+    },
+    "6": {
+      "artifact": "exp06.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 6",
+      "seed": 1006
+    },
+    "7": {
+      "artifact": "exp07.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 7",
+      "seed": 1007
+    },
+    "8": {
+      "artifact": "exp08.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 8",
+      "seed": 1008
+    },
+    "9": {
+      "artifact": "exp09.json",
+      "command": "python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 9",
+      "seed": 1009
+    }
+  },
+  "mode": "full",
+  "schema_version": "discos.paper-artifacts.index.v1"
+}
