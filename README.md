@@ -16,6 +16,7 @@ This repo is where contributors and integrators can run the client workflows, bl
 1. Threat model worked example: [docs/threat_model_worked_example.md](docs/threat_model_worked_example.md)
 2. UVP blackbox interface: [docs/uvp_blackbox_interface.md](docs/uvp_blackbox_interface.md)
 3. Exfiltration demo walkthrough: [examples/exfiltration_demo/](examples/exfiltration_demo/)
+4. 🚨 Positioning + dual-use risk matrix (with expanded use-case deep dives): [docs/POSITIONING.md](docs/POSITIONING.md)
 
 Role-based guide: [docs/reader_map.md](docs/reader_map.md)
 
