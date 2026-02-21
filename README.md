@@ -28,6 +28,12 @@ DiscOS is the untrusted discovery/client/tooling layer for EvidenceOS. EvidenceO
 
 Compatibility target is documented in [`COMPATIBILITY.md`](COMPATIBILITY.md).
 
+## Implementation status
+
+Quick parity reference for paper-vs-code claims: [`docs/PAPER_VS_CODE.md`](docs/PAPER_VS_CODE.md).
+
+Legacy implementation gate/details remain in [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md).
+
 ## Integration status
 
 - **Default endpoint:** DiscOS uses the EvidenceOS gRPC daemon endpoint on `127.0.0.1:50051`.
