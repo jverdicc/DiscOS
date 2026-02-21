@@ -11,6 +11,16 @@ Together they turn "many harmless-looking calls" into governed sequences with ex
 The result is not "perfect safety"; it is measurable containment with artifacts (capsules + ETL proofs) that third parties can inspect.
 This repo is where contributors and integrators can run the client workflows, blackbox examples, and stress/testing harnesses for that model.
 
+## Blackbox worked example (outsider-readable)
+
+Think of DiscOS as the caller and EvidenceOS as a guarded blackbox service.
+
+- **Inputs (tool calls / queries):** an operator creates a claim (`CreateClaim`), commits artifacts, then submits a sequence of adaptive `Execute` queries that try to learn from previous answers.
+- **EvidenceOS behavior over time:** each response is metered against a leakage budget, output is quantized, and policy state can shift from `allow` → `throttle` → `freeze`/defer once limits or invariants are hit.
+- **Outputs (what a user sees):** users get bounded replies while within budget, then explicit throttle/freeze outcomes, plus a fetchable capsule/log proof showing exactly why execution continued, slowed, or stopped.
+
+Deeper references: [Threat model worked example](docs/threat_model_worked_example.md), [UVP blackbox interface](docs/uvp_blackbox_interface.md), and the [Threat Model (Blackbox Walkthrough)](docs/THREAT_MODEL_BLACKBOX.md) (Figure 1 analog: trust-boundary blackbox flow).
+
 ## 👉 Start here
 
 1. Threat model worked example: [docs/threat_model_worked_example.md](docs/threat_model_worked_example.md)
