@@ -26,6 +26,7 @@ export interface HookResponse {
 
 export interface EvidenceGuardPluginConfig {
   evidenceUrl: string;
+  bearerToken?: string;
   timeoutMs?: number;
   circuitBreakerThreshold?: number;
   circuitBreakerResetMs?: number;
@@ -36,6 +37,7 @@ export interface EvidenceGuardPluginConfig {
 
 export interface ResolvedEvidenceGuardPluginConfig {
   evidenceUrl: string;
+  bearerToken?: string;
   timeoutMs: number;
   circuitBreakerThreshold: number;
   circuitBreakerResetMs: number;
@@ -53,6 +55,24 @@ export interface AuditEvent {
   reasonDetail?: string;
   blocked: boolean;
   budgetDelta?: {
+    spent: number;
+    remaining: number;
+  };
+}
+
+interface PreflightResponseWire {
+  decision?: Decision;
+  reasonCode?: string;
+  reason_code?: string;
+  reasonDetail?: string;
+  reason_detail?: string;
+  rewrittenParams?: Record<string, unknown>;
+  rewritten_params?: Record<string, unknown>;
+  budgetDelta?: {
+    spent: number;
+    remaining: number;
+  };
+  budget_delta?: {
     spent: number;
     remaining: number;
   };
@@ -95,6 +115,16 @@ function hashParams(params: Record<string, unknown>): string {
     h = Math.imul(h, 16777619);
   }
   return `fnv1a32:${(h >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function parsePreflightResponse(payload: PreflightResponseWire): PreflightResponse {
+  return {
+    decision: payload.decision ?? "ALLOW",
+    reasonCode: payload.reasonCode ?? payload.reason_code ?? "Unknown",
+    reasonDetail: payload.reasonDetail ?? payload.reason_detail,
+    rewrittenParams: payload.rewrittenParams ?? payload.rewritten_params,
+    budgetDelta: payload.budgetDelta ?? payload.budget_delta,
+  };
 }
 
 export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) {
@@ -149,13 +179,20 @@ export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) 
   async function preflight(ctx: ToolCallContext): Promise<PreflightResponse> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+    const requestId = crypto.randomUUID();
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      "X-Request-Id": requestId,
+    };
+
+    if (config.bearerToken) {
+      headers.Authorization = `Bearer ${config.bearerToken}`;
+    }
 
     try {
       const response = await fetch(`${config.evidenceUrl}/v1/preflight_tool_call`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
+        headers,
         body: JSON.stringify(ctx),
         signal: controller.signal,
       });
@@ -164,8 +201,8 @@ export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) 
         throw new Error(`EvidenceOS returned ${response.status}`);
       }
 
-      const payload = (await response.json()) as PreflightResponse;
-      return payload;
+      const payload = (await response.json()) as PreflightResponseWire;
+      return parsePreflightResponse(payload);
     } finally {
       clearTimeout(timeout);
     }
@@ -231,7 +268,10 @@ export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) 
 export function parseEvidenceGuardPluginConfig(
   rawConfig: EvidenceGuardPluginConfig,
 ): ResolvedEvidenceGuardPluginConfig {
+  const envToken = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.EVIDENCEOS_TOKEN;
+
   return {
+    bearerToken: envToken,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     circuitBreakerThreshold: DEFAULT_CIRCUIT_BREAKER_THRESHOLD,
     circuitBreakerResetMs: DEFAULT_CIRCUIT_BREAKER_RESET_MS,
