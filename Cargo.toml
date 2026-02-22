@@ -10,6 +10,7 @@ members = [
   "crates/discos-builder",
   "crates/evidenceos-verifier",
   "crates/evidenceos-core",
+  "crates/evidenceos-redteam",
 ]
 
 [workspace.package]
