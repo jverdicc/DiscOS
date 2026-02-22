@@ -23,6 +23,30 @@ test("parseEvidenceGuardPluginConfig applies defaults and overrides", () => {
   assert.equal(typeof config.auditLogger, "function");
 });
 
+test("parseEvidenceGuardPluginConfig uses EVIDENCEOS_TOKEN by default and allows override", () => {
+  const originalToken = process.env.EVIDENCEOS_TOKEN;
+  process.env.EVIDENCEOS_TOKEN = "env-token";
+
+  try {
+    const fromEnv = parseEvidenceGuardPluginConfig({
+      evidenceUrl: "http://127.0.0.1:8787",
+    });
+    assert.equal(fromEnv.bearerToken, "env-token");
+
+    const overridden = parseEvidenceGuardPluginConfig({
+      evidenceUrl: "http://127.0.0.1:8787",
+      bearerToken: "explicit-token",
+    });
+    assert.equal(overridden.bearerToken, "explicit-token");
+  } finally {
+    if (originalToken === undefined) {
+      delete process.env.EVIDENCEOS_TOKEN;
+    } else {
+      process.env.EVIDENCEOS_TOKEN = originalToken;
+    }
+  }
+});
+
 test("before_tool_call fails closed on timeout for high-risk tools", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (_input, init) => {

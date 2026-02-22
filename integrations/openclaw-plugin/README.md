@@ -35,18 +35,29 @@ import { createEvidenceGuardPlugin } from "@evidenceos/openclaw-guard";
 
 export default createEvidenceGuardPlugin({
   evidenceUrl: "http://127.0.0.1:8787",
+  bearerToken: process.env.EVIDENCEOS_TOKEN, // optional
   timeoutMs: 120,
   failClosedRisk: "high-only",
 });
 ```
 
-## Expected policy endpoint
+Minimal working config:
 
-This plugin calls:
+```ts
+createEvidenceGuardPlugin({
+  evidenceUrl: "http://127.0.0.1:8787",
+});
+```
 
-- `POST /v1/preflight_tool_call`
+## Wire contract (`POST /v1/preflight_tool_call`)
 
-With payload:
+This plugin sends:
+
+- Header `Content-Type: application/json`
+- Header `X-Request-Id: <uuid-v4>` (**required by EvidenceOS preflight policy**)
+- Header `Authorization: Bearer <token>` (optional; from `bearerToken` or `EVIDENCEOS_TOKEN`)
+
+Payload:
 
 ```json
 {
@@ -57,14 +68,23 @@ With payload:
 }
 ```
 
+Response fields accepted (camelCase and snake_case aliases):
+
+- `decision`
+- `reasonCode` / `reason_code`
+- `reasonDetail` / `reason_detail`
+- `rewrittenParams` / `rewritten_params`
+- `budgetDelta` / `budget_delta`
+
 Example response:
 
 ```json
 {
-  "decision": "DENY",
-  "reasonCode": "IrreversibleActionRequiresApproval",
-  "reasonDetail": "Delete tree denied without human approval",
-  "budgetDelta": { "spent": 0, "remaining": 100 }
+  "decision": "DOWNGRADE",
+  "reasonCode": "PolicyDowngrade",
+  "reasonDetail": "Delete path rewritten to a safe sandbox",
+  "rewrittenParams": { "path": "/tmp/sandbox/demo" },
+  "budgetDelta": { "spent": 1, "remaining": 99 }
 }
 ```
 
