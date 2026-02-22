@@ -28,6 +28,7 @@ Deeper references: [Threat model worked example](docs/threat_model_worked_exampl
 3. Exfiltration demo walkthrough: [examples/exfiltration_demo/](examples/exfiltration_demo/)
 4. 🚨 Positioning + dual-use risk matrix (with expanded use-case deep dives): [docs/POSITIONING.md](docs/POSITIONING.md)
 5. 🔒 Dual-use + misuse deployment policy (required reading for production): [docs/DUAL_USE_AND_MISUSE.md](docs/DUAL_USE_AND_MISUSE.md)
+6. Clinical trial harness (Epistemic Trial Harness) docs: [docs/EPISTEMIC_TRIAL_HARNESS.md](docs/EPISTEMIC_TRIAL_HARNESS.md) (canonical spec in EvidenceOS)
 
 Role-based guide: [docs/reader_map.md](docs/reader_map.md)
 

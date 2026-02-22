@@ -15,15 +15,17 @@ What you should get:
 - Blackbox control points (`CreateClaim` → `Freeze` → `Execute` → `Capsule/ETL`).
 - Where leakage budgets, throttling, and freeze/escalation are tested.
 
-## If you are an ML eval engineer
+## If you are an ML eval engineer / researcher
 
 Read in this order:
-1. [docs/uvp_blackbox_interface.md](uvp_blackbox_interface.md)
-2. [examples/exfiltration_demo/](../examples/exfiltration_demo/)
-3. [docs/threat_model_worked_example.md](threat_model_worked_example.md)
-4. [docs/scenarios/](scenarios/)
+1. [docs/EPISTEMIC_TRIAL_HARNESS.md](EPISTEMIC_TRIAL_HARNESS.md)
+2. [docs/uvp_blackbox_interface.md](uvp_blackbox_interface.md)
+3. [examples/exfiltration_demo/](../examples/exfiltration_demo/)
+4. [docs/threat_model_worked_example.md](threat_model_worked_example.md)
+5. [docs/scenarios/](scenarios/)
 
 What you should get:
+- A canonical entrypoint for running clinical-trial style epistemic evaluations.
 - Expected blackbox I/O contract.
 - How adaptive probing appears in practice and how controls respond.
 - Scenario fixtures you can reuse for evaluation pipelines.
