@@ -109,3 +109,8 @@ fn claim_id_fields_are_bytes_on_v2_surface() {
         );
     }
 }
+
+#[test]
+fn protocol_semver_is_pinned_for_daemon_compatibility() {
+    assert_eq!(evidenceos_protocol::PROTOCOL_SEMVER, "2.1.0");
+}

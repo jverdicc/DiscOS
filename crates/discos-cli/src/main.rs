@@ -44,6 +44,7 @@ use discos_core::{
 use evidenceos_core::safety_policy::{
     enforce_dual_use_policy, ClaimSafetyContext, DualUsePolicyConfig, EnforcementDecision,
 };
+use semver::{Version, VersionReq};
 use tokio_stream::StreamExt;
 use tonic::Code;
 use tracing_subscriber::EnvFilter;
@@ -736,8 +737,19 @@ fn expected_protocol_semver() -> String {
     evidenceos_protocol::PROTOCOL_SEMVER.to_string()
 }
 
+fn expected_daemon_version_req() -> VersionReq {
+    VersionReq::parse(">=2.1.0, <3.0.0").expect("daemon semver requirement is valid")
+}
+
 fn major_version(semver: &str) -> Option<&str> {
     semver.split('.').next().filter(|major| !major.is_empty())
+}
+
+fn parse_daemon_semver(daemon_version: &str) -> Option<Version> {
+    daemon_version
+        .split('/')
+        .next_back()
+        .and_then(|raw| Version::parse(raw).ok())
 }
 
 fn compatibility_error_json(server: &pb::GetServerInfoResponse) -> serde_json::Value {
@@ -745,6 +757,8 @@ fn compatibility_error_json(server: &pb::GetServerInfoResponse) -> serde_json::V
         "error": "incompatible_daemon",
         "expected_protocol_semver": expected_protocol_semver(),
         "expected_proto_hash": expected_proto_hash(),
+        "expected_daemon_version_range": expected_daemon_version_req().to_string(),
+        "action": "Upgrade or downgrade discos-client/evidenceosd so protocol hash and daemon version range match.",
         "server": {
             "protocol_semver": server.protocol_semver,
             "proto_hash": server.proto_hash,
@@ -756,11 +770,28 @@ fn compatibility_error_json(server: &pb::GetServerInfoResponse) -> serde_json::V
     })
 }
 
+fn drift_warning_json(server: &pb::GetServerInfoResponse) -> serde_json::Value {
+    serde_json::json!({
+        "warning": "protocol_drift_allowed",
+        "expected_protocol_semver": expected_protocol_semver(),
+        "expected_proto_hash": expected_proto_hash(),
+        "expected_daemon_version_range": expected_daemon_version_req().to_string(),
+        "server": {
+            "protocol_semver": server.protocol_semver,
+            "proto_hash": server.proto_hash,
+            "daemon_version": server.daemon_version,
+        }
+    })
+}
+
 fn is_server_compatible(server: &pb::GetServerInfoResponse) -> bool {
     let expected_semver = expected_protocol_semver();
     let major_ok = major_version(&server.protocol_semver) == major_version(&expected_semver);
     let hash_ok = server.proto_hash == expected_proto_hash();
-    major_ok && hash_ok
+    let daemon_ok = parse_daemon_semver(&server.daemon_version)
+        .map(|v| expected_daemon_version_req().matches(&v))
+        .unwrap_or(false);
+    major_ok && hash_ok && daemon_ok
 }
 
 async fn assert_server_compatibility(
@@ -768,10 +799,16 @@ async fn assert_server_compatibility(
     allow_drift: bool,
 ) -> anyhow::Result<()> {
     let info = client.get_server_info().await?;
-    if !allow_drift && !is_server_compatible(&info) {
+    if is_server_compatible(&info) {
+        return Ok(());
+    }
+
+    if !allow_drift {
         println!("{}", compatibility_error_json(&info));
         std::process::exit(2);
     }
+
+    println!("{}", drift_warning_json(&info));
     Ok(())
 }
 
@@ -1450,6 +1487,32 @@ feed"
             feature_flags: vec!["tls_enabled".into()],
         };
         assert!(!is_server_compatible(&info));
+    }
+
+    #[test]
+    fn compatibility_guard_rejects_daemon_version_outside_range() {
+        let info = pb::GetServerInfoResponse {
+            protocol_semver: expected_protocol_semver(),
+            proto_hash: expected_proto_hash(),
+            build_git_commit: "abc123".into(),
+            build_time_utc: "2026-01-01T00:00:00Z".into(),
+            daemon_version: "evidenceosd/3.0.0".into(),
+            feature_flags: vec!["tls_enabled".into()],
+        };
+        assert!(!is_server_compatible(&info));
+    }
+
+    #[test]
+    fn compatibility_guard_accepts_matching_daemon_version() {
+        let info = pb::GetServerInfoResponse {
+            protocol_semver: expected_protocol_semver(),
+            proto_hash: expected_proto_hash(),
+            build_git_commit: "abc123".into(),
+            build_time_utc: "2026-01-01T00:00:00Z".into(),
+            daemon_version: "evidenceosd/2.1.3".into(),
+            feature_flags: vec!["tls_enabled".into()],
+        };
+        assert!(is_server_compatible(&info));
     }
 
     #[test]
