@@ -22,5 +22,5 @@ license = "Apache-2.0"
 repository = "https://github.com/jverdicc/DiscOS"
 
 [workspace.dependencies]
-evidenceos-protocol = { git = "https://github.com/EvidenceOS/evidenceos.git", tag = "v2.1.0", package = "evidenceos-protocol" }
+evidenceos-protocol = { version = "0.1.0" }
 evidenceos-verifier = { path = "crates/evidenceos-verifier", version = "0.1.0" }
