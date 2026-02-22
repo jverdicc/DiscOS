@@ -38,6 +38,9 @@ jobs:
       - name: Run format, clippy, tests, coverage evidence script
         run: ./scripts/test_evidence.sh
 
+      - name: Run DiscOS red-team subset
+        run: cargo test -p evidenceos-redteam --lib
+
       - name: Upload CI artifacts
         if: always()
         uses: actions/upload-artifact@v4
