@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Literal, Mapping, MutableMapping
@@ -267,7 +268,10 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
         return result.params
 
     def _preflight(self, payload: Mapping[str, Any]) -> dict[str, Any]:
-        headers = {"content-type": "application/json"}
+        headers = {
+            "content-type": "application/json",
+            "X-Request-Id": str(uuid.uuid4()),
+        }
         if self.token:
             headers["authorization"] = f"Bearer {self.token}"
 
@@ -287,9 +291,20 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
                 if not isinstance(body, dict):
                     raise ValueError("Invalid JSON body from EvidenceOS")
                 return body
-            except (urllib_error.HTTPError, urllib_error.URLError, TimeoutError, ValueError) as exc:
-                retryable_http = isinstance(exc, urllib_error.HTTPError) and exc.code >= 500
-                retryable = retryable_http or isinstance(exc, (urllib_error.URLError, TimeoutError))
+            except urllib_error.HTTPError as exc:
+                parsed_error = self._parse_http_error_body(exc)
+                if parsed_error is not None:
+                    return parsed_error
+
+                retryable_http = exc.code >= 500
+                retryable = retryable_http
+                if attempt >= self.max_retries or not retryable:
+                    last_exc = exc
+                    break
+                backoff_s = ((2**attempt) * self.retry_backoff_ms) / 1000
+                self._sleep(backoff_s)
+            except (urllib_error.URLError, TimeoutError, ValueError) as exc:
+                retryable = isinstance(exc, (urllib_error.URLError, TimeoutError))
                 if attempt >= self.max_retries or not retryable:
                     last_exc = exc
                     break
@@ -302,6 +317,36 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
 
     def _should_fail_closed(self, tool_name: str) -> bool:
         return self.fail_closed_risk == "all" or tool_name in self.high_risk_tools
+
+    @staticmethod
+    def _parse_http_error_body(exc: urllib_error.HTTPError) -> dict[str, Any] | None:
+        if exc.code >= 500:
+            return None
+
+        raw = exc.read()
+        if not raw:
+            return {
+                "decision": "DENY",
+                "reasonCode": f"HTTP_{exc.code}",
+                "reasonDetail": str(exc.reason),
+            }
+
+        try:
+            decoded = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return {
+                "decision": "DENY",
+                "reasonCode": f"HTTP_{exc.code}",
+                "reasonDetail": str(exc.reason),
+            }
+
+        if not isinstance(decoded, Mapping):
+            return {
+                "decision": "DENY",
+                "reasonCode": f"HTTP_{exc.code}",
+                "reasonDetail": str(exc.reason),
+            }
+        return dict(decoded)
 
     @staticmethod
     def _parse_decision(response: Mapping[str, Any]) -> EvidenceOSDecision:
@@ -317,17 +362,16 @@ class EvidenceOSGuardCallbackHandler(BaseCallbackHandler):
         else:
             decision = "DENY"
 
-        reason_detail = response.get("reasonDetail")
+        reason_detail = response.get("reasonDetail", response.get("reason_detail"))
+        reason_code = response.get("reasonCode", response.get("reason_code", "UnknownDecision"))
+        rewritten = response.get("rewrittenParams", response.get("rewritten_params"))
+        budget_delta = response.get("budgetDelta", response.get("budget_delta"))
         return EvidenceOSDecision(
             decision=decision,
-            reason_code=str(response.get("reasonCode", "UnknownDecision")),
+            reason_code=str(reason_code),
             reason_detail=str(reason_detail) if reason_detail is not None else None,
-            rewritten_params=response.get("rewrittenParams")
-            if isinstance(response.get("rewrittenParams"), dict)
-            else None,
-            budget_delta=response.get("budgetDelta")
-            if isinstance(response.get("budgetDelta"), dict)
-            else None,
+            rewritten_params=rewritten if isinstance(rewritten, dict) else None,
+            budget_delta=budget_delta if isinstance(budget_delta, dict) else None,
         )
 
     def _emit_audit(

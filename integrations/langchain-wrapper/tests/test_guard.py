@@ -1,6 +1,7 @@
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from io import BytesIO
 from urllib import error as urllib_error
 
 import pytest
@@ -156,6 +157,54 @@ def test_rewrites_params_on_downgrade(monkeypatch):
     assert events[-1]["decision"] == "DOWNGRADE"
 
 
+def test_accepts_legacy_snake_case_fields(monkeypatch):
+    events = []
+    monkeypatch.setattr(
+        "langchain_evidenceos.guard.urllib_request.urlopen",
+        lambda req, timeout: _FakeResponse(
+            {
+                "decision": "DOWNGRADE",
+                "reason_code": "LegacyDowngrade",
+                "reason_detail": "legacy casing",
+                "rewritten_params": {"query": "safe"},
+                "budget_delta": {"spent": 2},
+            }
+        ),
+    )
+
+    out = _handler(events).guard_tool_call(tool_name="search.web", tool_input={"query": "secret"})
+    assert out == {"query": "safe"}
+    assert events[-1]["reasonCode"] == "LegacyDowngrade"
+
+
+def test_http_4xx_returns_policy_decision_error(monkeypatch):
+    events = []
+
+    def deny(_req, timeout=None):
+        payload = json.dumps(
+            {
+                "decision": "DENY",
+                "reasonCode": "MissingRequestId",
+                "reasonDetail": "X-Request-Id header is required",
+            }
+        ).encode("utf-8")
+        raise urllib_error.HTTPError(
+            url="http://evidenceos.test/v1/preflight_tool_call",
+            code=400,
+            msg="Bad Request",
+            hdrs=None,
+            fp=BytesIO(payload),
+        )
+
+    monkeypatch.setattr("langchain_evidenceos.guard.urllib_request.urlopen", deny)
+
+    with pytest.raises(EvidenceOSDecisionError) as excinfo:
+        _handler(events).guard_tool_call(tool_name="read.docs", tool_input={"q": "x"})
+
+    assert excinfo.value.receipt.reason_code == "MissingRequestId"
+    assert events[-1]["blocked"] is True
+
+
 def test_fails_closed_on_network_error_for_all_tools_by_default(monkeypatch):
     events = []
     handler = _handler(events)
@@ -247,6 +296,7 @@ def test_sends_bearer_token_and_payload(preflight_server):
 
     request = _SequenceHandler.requests[-1]
     assert request["headers"]["authorization"] == "Bearer secret-token"
+    assert request["headers"]["x-request-id"]
     assert request["body"] == {
         "toolName": "search.web",
         "params": {"query": "status"},
