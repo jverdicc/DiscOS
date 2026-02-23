@@ -20,16 +20,17 @@ Add reproducible simulation and test commands, including explicit seeds/paramete
 
 ---
 
-## 2) Add discos-cli sim run exp0|exp1|exp2|exp11
+## 2) Add discos-cli sim run exp0|exp11|exp12
 
 **Labels:** `ux`, `good first issue`
 
 **Description**
 Add a top-level CLI path to run selected simulations without writing Rust code:
-`discos-cli sim run exp0|exp1|exp2|exp11`.
+`discos-cli sim run exp0|exp11|exp12`.
 
 **Acceptance Criteria**
-- CLI accepts each experiment selector (`exp0`, `exp1`, `exp2`, `exp11`).
+- CLI accepts each experiment selector (`exp0`, `exp11`, `exp12`).
+- No synthetic placeholder experiments are exposed as paper-reproduction commands.
 - Simulations execute from CLI only (no code changes needed by user).
 - Output is emitted as JSON and is machine-parseable.
 

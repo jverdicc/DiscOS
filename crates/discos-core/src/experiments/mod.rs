@@ -18,8 +18,6 @@
 //! Reviewer-facing reproduction lives in EvidenceOS (`artifacts/forc10/original_python`).
 
 pub mod exp0;
-pub mod exp1;
 pub mod exp11;
 pub mod exp12;
-pub mod exp2;
 pub mod exp7b;

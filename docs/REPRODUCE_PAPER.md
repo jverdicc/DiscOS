@@ -1,6 +1,7 @@
 # Reproduce paper artifacts (authoritative path)
 
 DiscOS no longer ships a local synthetic paper generator. The authoritative FORC10 reproduction pipeline lives in the EvidenceOS repository under `artifacts/forc10/original_python/`.
+Specifically, DiscOS does **not** provide local `exp1`/`exp2` paper experiment implementations; those placeholders were removed from `discos-core` to avoid misleading reviewer workflows.
 
 ## One authoritative command
 
