@@ -30,6 +30,9 @@ jobs:
       - name: Verify no local EvidenceOS proto drift
         run: ./scripts/check_proto_drift.sh
 
+      - name: Verify vendored EvidenceOS crates are pinned and drift-free
+        run: ./scripts/check_vendor_drift.sh
+
       - name: Install coverage and fuzz tooling
         run: |
           cargo install cargo-llvm-cov --locked --force
