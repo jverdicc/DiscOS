@@ -21,6 +21,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
 };
+use std::time::Duration;
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use evidenceos_verifier as verifier;
@@ -88,6 +89,29 @@ pub struct ClientConnectConfig {
     pub endpoint: String,
     pub tls: Option<ClientTlsOptions>,
     pub auth: Option<ClientAuth>,
+    pub connect_timeout_ms: u64,
+    pub request_timeout_ms: u64,
+    pub keepalive_interval_ms: u64,
+    pub keepalive_timeout_ms: u64,
+}
+
+pub const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 5_000;
+pub const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
+pub const DEFAULT_KEEPALIVE_INTERVAL_MS: u64 = 30_000;
+pub const DEFAULT_KEEPALIVE_TIMEOUT_MS: u64 = 10_000;
+
+impl ClientConnectConfig {
+    pub fn with_endpoint(endpoint: impl Into<String>) -> Self {
+        Self {
+            endpoint: endpoint.into(),
+            tls: None,
+            auth: None,
+            connect_timeout_ms: DEFAULT_CONNECT_TIMEOUT_MS,
+            request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
+            keepalive_interval_ms: DEFAULT_KEEPALIVE_INTERVAL_MS,
+            keepalive_timeout_ms: DEFAULT_KEEPALIVE_TIMEOUT_MS,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -151,17 +175,20 @@ pub struct DiscosClient {
 
 impl DiscosClient {
     pub async fn connect(endpoint: &str) -> Result<Self, ClientError> {
-        Self::connect_with_config(ClientConnectConfig {
-            endpoint: endpoint.to_string(),
-            tls: None,
-            auth: None,
-        })
-        .await
+        Self::connect_with_config(ClientConnectConfig::with_endpoint(endpoint)).await
     }
 
     pub async fn connect_with_config(config: ClientConnectConfig) -> Result<Self, ClientError> {
         let mut endpoint = Endpoint::from_shared(config.endpoint)
             .map_err(|e| ClientError::InvalidInput(format!("invalid endpoint: {e}")))?;
+
+        endpoint = endpoint
+            .connect_timeout(Duration::from_millis(config.connect_timeout_ms))
+            .timeout(Duration::from_millis(config.request_timeout_ms))
+            .http2_keep_alive_interval(Duration::from_millis(config.keepalive_interval_ms))
+            .keep_alive_timeout(Duration::from_millis(config.keepalive_timeout_ms))
+            .keep_alive_while_idle(true)
+            .tcp_keepalive(Some(Duration::from_millis(config.keepalive_interval_ms)));
 
         if let Some(tls) = config.tls {
             let mut tls_config =
@@ -338,6 +365,20 @@ impl DiscosClient {
             .await
             .map(|r| r.into_inner())
             .map_err(|e| ClientError::Kernel(e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn client_connect_config_defaults_are_safe_for_production() {
+        let config = ClientConnectConfig::with_endpoint("http://127.0.0.1:50051");
+        assert_eq!(config.connect_timeout_ms, DEFAULT_CONNECT_TIMEOUT_MS);
+        assert_eq!(config.request_timeout_ms, DEFAULT_REQUEST_TIMEOUT_MS);
+        assert_eq!(config.keepalive_interval_ms, DEFAULT_KEEPALIVE_INTERVAL_MS);
+        assert_eq!(config.keepalive_timeout_ms, DEFAULT_KEEPALIVE_TIMEOUT_MS);
     }
 }
 
