@@ -16,6 +16,7 @@ sha2 = "0.10"
 ed25519-dalek = "2"
 evidenceos-protocol.workspace = true
 evidenceos-verifier.workspace = true
+evidenceos-auth-protocol.workspace = true
 
 [dev-dependencies]
 base64 = "0.22"

@@ -1,5 +1,5 @@
 use discos_client::{pb, ClientAuth, ClientConnectConfig, ClientTlsOptions, DiscosClient};
-use sha2::{Digest, Sha256};
+use evidenceos_auth_protocol::{sign_hmac_sha256, signing_material, HMAC_SHA256_TEST_VECTORS};
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::{
     transport::{Certificate, Identity, Server, ServerTlsConfig},
@@ -219,54 +219,13 @@ impl pb::evidence_os_server::EvidenceOs for TestDaemon {
     }
 }
 
-fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
-    const BLOCK_SIZE: usize = 64;
-    let mut key_block = [0u8; BLOCK_SIZE];
-    if key.len() > BLOCK_SIZE {
-        let mut hasher = Sha256::new();
-        hasher.update(key);
-        let hashed: [u8; 32] = hasher.finalize().into();
-        key_block[..32].copy_from_slice(&hashed);
-    } else {
-        key_block[..key.len()].copy_from_slice(key);
-    }
-
-    let mut ipad = [0x36u8; BLOCK_SIZE];
-    let mut opad = [0x5cu8; BLOCK_SIZE];
-    for i in 0..BLOCK_SIZE {
-        ipad[i] ^= key_block[i];
-        opad[i] ^= key_block[i];
-    }
-
-    let mut inner = Sha256::new();
-    inner.update(ipad);
-    inner.update(data);
-    let inner_hash = inner.finalize();
-
-    let mut outer = Sha256::new();
-    outer.update(opad);
-    outer.update(inner_hash);
-    outer.finalize().into()
-}
-
-fn daemon_signing_material(request_id: &str, path: &str, timestamp: Option<&str>) -> String {
-    match timestamp {
-        Some(ts) => format!("{request_id}:{path}:{ts}"),
-        None => format!("{request_id}:{path}"),
-    }
-}
-
 #[test]
-fn daemon_signing_material_matches_protocol_contract() {
-    let path = "/evidenceos.v2.EvidenceOS/CreateClaimV2";
-    assert_eq!(
-        daemon_signing_material("req-1", path, None),
-        "req-1:/evidenceos.v2.EvidenceOS/CreateClaimV2"
-    );
-    assert_eq!(
-        daemon_signing_material("req-1", path, Some("1700000000")),
-        "req-1:/evidenceos.v2.EvidenceOS/CreateClaimV2:1700000000"
-    );
+fn shared_auth_protocol_vectors_match() {
+    for vector in HMAC_SHA256_TEST_VECTORS {
+        let material = signing_material(vector.request_id, vector.path, vector.timestamp);
+        let signature = sign_hmac_sha256(vector.secret, &material);
+        assert_eq!(hex::encode(signature), vector.expected_signature_hex);
+    }
 }
 
 async fn spawn_tls_server<F>(interceptor: F) -> std::net::SocketAddr
@@ -369,10 +328,17 @@ async fn connects_with_tls_and_hmac_auth() {
             .get("x-evidenceos-timestamp")
             .and_then(|v| v.to_str().ok());
 
-        let expected = hex::encode(hmac_sha256(
-            &secret_for_server,
-            daemon_signing_material(request_id, request.uri().path(), timestamp).as_bytes(),
-        ));
+        let key_id = request
+            .metadata()
+            .get("x-evidenceos-key-id")
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| Status::unauthenticated("missing key id"))?;
+        if key_id != "k-prod" {
+            return Err(Status::unauthenticated("invalid key id"));
+        }
+
+        let material = signing_material(request_id, request.uri().path(), timestamp);
+        let expected = hex::encode(sign_hmac_sha256(&secret_for_server, &material));
 
         if expected != signature_hex {
             return Err(Status::unauthenticated("invalid signature"));
