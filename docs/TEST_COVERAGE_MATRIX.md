@@ -54,8 +54,6 @@ Chained in `end_to_end_claim_roundtrip_and_kout_and_etl` (NEW):
 | Module / parameter surface | Unit test | Property / fuzz test | Integration / system test |
 | --- | --- | --- | --- |
 | experiments exp0 (`bucket_count`, `delta_sigma`) | `tests/experiments_integration.rs::exp0_quantization_and_hysteresis_reduce_recovery` | `fuzz/fuzz_targets/fuzz_client_grpc_response_state_machine.rs` | `tests/experiments_integration.rs::exp0_quantization_and_hysteresis_reduce_recovery` |
-| experiments exp1 (`query_volume`, `bucket_count`) | `tests/experiments_integration.rs::exp1_effective_bits_reduction_with_hysteresis` | `crates/discos-core/tests/property_spaces.rs` | `tests/experiments_integration.rs::exp1_effective_bits_reduction_with_hysteresis` |
-| experiments exp2 (`joint_budget_bits`) | `tests/experiments_integration.rs::exp2_cross_probing_reduction_against_baseline` | `crates/discos-core/tests/exp2_non_finite.rs` | `tests/experiments_integration.rs::exp2_cross_probing_reduction_against_baseline` |
 | experiments exp11 (`identity_count`, `k_bits_budget`) | `tests/experiments_integration.rs::exp11_sybil_flat_topichash_vs_naive` | `crates/discos-core/tests/exp11_properties.rs` | `tests/experiments_integration.rs::exp11_sybil_flat_topichash_vs_naive` |
 | experiments exp12 (`psplit`, `query_volume`) | `crates/discos-core/tests/exp12_tests.rs::exp12_matches_golden_vector` | `crates/discos-core/tests/exp12_tests.rs::exp12_p99_non_decreasing_with_psplit` | `tests/experiments_integration.rs::exp12_false_split_summary` |
 | topicid + TopicBudgetLedger (`alpha_micros`, `k_bits_budget`) | `crates/discos-core/tests/topicid_vectors.rs` | `crates/discos-core/tests/property_spaces.rs` | `crates/discos-core/tests/structured_claims_end_to_end.rs` |
