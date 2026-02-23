@@ -78,6 +78,82 @@ jobs:
           npm run build
           npm test
 
+
+  preflight_e2e:
+    runs-on: ubuntu-latest
+    env:
+      EVIDENCEOS_REV: 4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af
+      EVIDENCEOS_REPO: https://github.com/EvidenceOS/evidenceos.git
+      EVIDENCEOS_PREFLIGHT_URL: http://127.0.0.1:8787
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Checkout pinned EvidenceOS
+        run: |
+          git clone "$EVIDENCEOS_REPO" ../EvidenceOS
+          cd ../EvidenceOS
+          git checkout "$EVIDENCEOS_REV"
+
+      - name: Build evidenceos-daemon
+        run: cargo build --manifest-path ../EvidenceOS/Cargo.toml --bin evidenceos-daemon --release
+
+      - name: Start daemon and wait for preflight endpoint
+        run: |
+          mkdir -p artifacts/preflight-e2e
+          ../EvidenceOS/target/release/evidenceos-daemon --listen 127.0.0.1:8787 --data-dir artifacts/preflight-e2e/data > artifacts/preflight-e2e/daemon.log 2>&1 &
+          echo $! > artifacts/preflight-e2e/daemon.pid
+          for _ in $(seq 1 60); do
+            code=$(curl -sS -o artifacts/preflight-e2e/preflight_probe.json -w "%{http_code}" -X POST "$EVIDENCEOS_PREFLIGHT_URL/v1/preflight_tool_call" -H "content-type: application/json" --data '{"toolName":"health.probe","params":{}}' || true)
+            if [ "$code" != "000" ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "preflight endpoint did not start" >&2
+          exit 1
+
+      - name: Run openclaw-plugin daemon preflight e2e test
+        working-directory: integrations/openclaw-plugin
+        run: |
+          npm ci
+          node --test --experimental-strip-types tests/plugin.e2e-daemon.test.ts
+
+      - name: Run langchain-wrapper daemon preflight e2e test
+        working-directory: integrations/langchain-wrapper
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[test]
+          pytest -q tests/test_e2e_daemon_contract.py
+
+      - name: Stop daemon
+        if: always()
+        run: |
+          if [ -f artifacts/preflight-e2e/daemon.pid ]; then
+            kill $(cat artifacts/preflight-e2e/daemon.pid) || true
+            wait $(cat artifacts/preflight-e2e/daemon.pid) || true
+          fi
+
+      - name: Upload preflight e2e artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preflight-e2e-artifacts
+          path: artifacts/preflight-e2e/
+          if-no-files-found: warn
+
   system:
     runs-on: ubuntu-latest
     env:
