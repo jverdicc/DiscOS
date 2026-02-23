@@ -5,7 +5,7 @@ DiscOS tracks the EvidenceOS public protocol surface by depending directly on th
 ## Current compatibility target
 
 - **DiscOS workspace version:** `0.1.0`
-- **EvidenceOS upstream repository:** `https://github.com/EvidenceOS/evidenceos.git`
+- **EvidenceOS upstream repository:** `https://github.com/jverdicc/EvidenceOS.git`
 - **EvidenceOS compatibility revision:** `4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af`
 - **Protocol package:** `evidenceos.v1` with `*V2` RPC/message surfaces enabled for public daemon interoperability
 
