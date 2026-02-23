@@ -291,6 +291,7 @@ Structured claims exist to enforce **capacity-bounded outputs** and stable, cano
 
 See:
 - Coverage matrix: [`docs/TEST_COVERAGE_MATRIX.md`](docs/TEST_COVERAGE_MATRIX.md)
+- Parameter appendix: [`docs/TEST_COVERAGE_PARAMETERS.md`](docs/TEST_COVERAGE_PARAMETERS.md)
 - Structured claims tests:
   - [`crates/discos-core/tests/structured_claims_vectors.rs`](crates/discos-core/tests/structured_claims_vectors.rs)
   - [`crates/discos-core/tests/structured_claims_prop.rs`](crates/discos-core/tests/structured_claims_prop.rs)
@@ -316,7 +317,7 @@ See:
 | EXP-1 effective-bit reduction | Deterministic hysteresis experiment under `sim` feature | [`tests/experiments_integration.rs` (exp1)](tests/experiments_integration.rs), [`docs/TEST_EVIDENCE.md`](docs/TEST_EVIDENCE.md) | Implemented + tested |
 | EXP-2 cross-probing resistance | Joint budget behavior validated against baseline success rates | [`tests/experiments_integration.rs` (exp2)](tests/experiments_integration.rs), [`docs/TEST_EVIDENCE.md`](docs/TEST_EVIDENCE.md) | Implemented + tested |
 | EXP-11 sybil resistance trend | Topic-hash-based defense compared with naive baseline | [`tests/experiments_integration.rs` (exp11)](tests/experiments_integration.rs), [`docs/TEST_EVIDENCE.md`](docs/TEST_EVIDENCE.md) | Implemented + tested |
-| Structured claim canonicalization and bounds | Canonical parser/validator + property/vector/end-to-end tests | [`docs/TEST_COVERAGE_MATRIX.md`](docs/TEST_COVERAGE_MATRIX.md), [`docs/TEST_EVIDENCE.md`](docs/TEST_EVIDENCE.md) | Implemented + tested |
+| Structured claim canonicalization and bounds | Canonical parser/validator + property/vector/end-to-end tests | [`docs/TEST_COVERAGE_MATRIX.md`](docs/TEST_COVERAGE_MATRIX.md), [`docs/TEST_COVERAGE_PARAMETERS.md`](docs/TEST_COVERAGE_PARAMETERS.md), [`docs/TEST_EVIDENCE.md`](docs/TEST_EVIDENCE.md) | Implemented + tested |
 
 ## Adversarial Scenarios (Safe Examples)
 

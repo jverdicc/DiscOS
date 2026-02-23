@@ -2,6 +2,8 @@
 
 Scope: `crates/discos-core/src/structured_claims.rs`
 
+Companion appendix: parameter-level cross-check matrix in [`TEST_COVERAGE_PARAMETERS.md`](TEST_COVERAGE_PARAMETERS.md).
+
 Legend: `(existing)` = already present before this change, `(NEW)` = added in this change.
 
 ## Field and parameter coverage

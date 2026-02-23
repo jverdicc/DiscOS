@@ -16,7 +16,8 @@ For deeper context, see the [threat model walkthrough](threat_model_worked_examp
 
 - [Start here: threat model walkthrough](threat_model_worked_example.md)
 - [Threat Model (Blackbox Walkthrough)](THREAT_MODEL_BLACKBOX.md) — outsider-friendly narrative of baseline leakage vs EvidenceOS controls.
-- [Test Coverage Matrix](TEST_COVERAGE_MATRIX.md) — mapping of guarantees to tests.
+- [Test Coverage Matrix](TEST_COVERAGE_MATRIX.md) — primary guarantee-to-test mapping.
+- [Test Coverage Parameters Appendix](TEST_COVERAGE_PARAMETERS.md) — parameter-level boundary coverage details.
 - [Test Evidence](TEST_EVIDENCE.md) — experiment/test evidence notes.
 - [Issue Backlog](ISSUE_BACKLOG.md) — prioritized future work.
 - [Dual-use + misuse policy](DUAL_USE_AND_MISUSE.md) — required deployment safety controls and prohibited uses.
