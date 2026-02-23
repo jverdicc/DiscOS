@@ -13,22 +13,22 @@ This document is the fast truth table for review-time questions about what is im
 | Paper section / claim | Repo implementation | Status | Links |
 | --- | --- | --- | --- |
 | DiscOS is the operator/client layer; EvidenceOS is the trusted verifier boundary. | Implemented as a Rust client/CLI + deterministic artifact tooling talking to EvidenceOS over gRPC. | Implemented | `README.md` (architecture split), `docs/START_HERE.md` |
-| Paper artifact bundle contains reproducible experiments. | Implemented through a vendored deterministic Python artifact generator (`paper_artifacts/reproduce_paper.py`) and documented commands. | Implemented | `docs/REPRODUCE_PAPER.md`, `paper_artifacts/reproduce_paper.py` |
-| Mainline DiscOS runtime is Python. | **Not true for mainline.** Mainline DiscOS is Rust; Python in this repo is for paper artifact generation and selected demos/tests. | Not Implemented (for Python mainline) | `README.md` ("DiscOS (Rust)"), `docs/REPRODUCE_PAPER.md`, `crates/discos-cli/tests/paper_artifacts_smoke.rs` |
+| Paper artifact bundle contains reproducible experiments. | **Authoritative path is in EvidenceOS** (`artifacts/forc10/original_python`). DiscOS provides a thin wrapper (`paper_artifacts/reproduce_paper.py`) that delegates and never generates local synthetic outputs. | Implemented (delegated) | `docs/REPRODUCE_PAPER.md`, `paper_artifacts/reproduce_paper.py` |
+| Mainline DiscOS runtime is Python. | **Not true for mainline.** Mainline DiscOS is Rust; Python in this repo is for wrappers, demos, and tests. | Not Implemented (for Python mainline) | `README.md`, `docs/REPRODUCE_PAPER.md` |
 | PLN controls from the paper are fully shipped in DiscOS default path. | Documented as optional/high-assurance controls discussed in threat-model docs, not represented as fully-on-by-default DiscOS behavior. | Partial | `docs/THREAT_MODEL_BLACKBOX.md`, `docs/ALIGNMENT_SPILLOVER_POSITIONING.md` |
-| Experiment 11/12 trends are reproducible and deterministic. | Implemented with deterministic simulations/tests and reproducible paper-suite artifacts. | Implemented | `tests/experiments_integration.rs`, `crates/discos-core/tests/exp11_properties.rs`, `crates/discos-core/tests/exp12_tests.rs`, `README.md` evidence matrix |
-| Appendix B structured claim DSL is fully implemented end-to-end as described in the paper appendix. | Structured claim canonicalization and bounded ingestion are implemented/tested; appendix-specific full DSL parity is not claimed here. | Partial | `README.md` (Structured Claims + verification matrix), `docs/TEST_COVERAGE_MATRIX.md` |
+| Experiment 11/12 trends are reproducible and deterministic. | Implemented with deterministic simulations/tests; reviewer-facing paper reproduction should be executed through the EvidenceOS artifact path. | Implemented | `tests/experiments_integration.rs`, `crates/discos-core/tests/exp11_properties.rs`, `crates/discos-core/tests/exp12_tests.rs` |
+| Appendix B structured claim DSL is fully implemented end-to-end as described in the paper appendix. | Structured claim canonicalization and bounded ingestion are implemented/tested; appendix-specific full DSL parity is not claimed here. | Partial | `README.md`, `docs/TEST_COVERAGE_MATRIX.md` |
 
-## Explicit language note: Python artifacts vs Rust mainline
+## Explicit language note: toy experiments vs paper reproduction
 
-The paper artifact bundle includes Python reference + Python experiment reproduction paths. DiscOS mainline client/runtime in this repository is Rust. Python here is intentionally retained for reproducible artifact generation and a few test/demo paths; it is not the primary runtime surface.
+DiscOS includes deterministic experiment code under `crates/discos-core/src/experiments/` for local validation and regression testing. Treat these as toy/internal models unless explicitly mapped to the authoritative EvidenceOS paper artifact runner.
 
 ## FORC artifact reproduction path
 
 Use this path when reviewers ask for the paper-aligned artifact baseline:
 
-1. **Paper/artifact snapshot DOI:** `10.5281/zenodo.18692345` (badge-linked from `README.md`).
-2. **DiscOS repo artifact command path:** `make reproduce-paper` (or `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts`).
-3. **Exact code snapshot convention for reviews:** pin and record `git rev-parse HEAD` from the DiscOS checkout used to produce artifacts, and include it in review notes alongside the generated `artifacts/paper-artifacts/index.json`.
+1. **EvidenceOS authoritative command path:** `make -C artifacts/forc10/original_python verify`.
+2. **DiscOS wrapper path (optional convenience):** `python3 paper_artifacts/reproduce_paper.py --evidenceos-repo ../EvidenceOS -- --verify`.
+3. **Exact code snapshot convention for reviews:** pin and record `git rev-parse HEAD` for both DiscOS and EvidenceOS used to produce artifacts.
 
-For cross-repo parity reviews, pair this with the matching EvidenceOS commit used for the same run.
+For cross-repo parity reviews, always include the paired EvidenceOS commit hash in notes.

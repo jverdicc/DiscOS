@@ -28,7 +28,7 @@ demo-exfil-evidenceos-mock:
 	python3 examples/exfiltration_demo/attack_bitflip.py --mode evidenceos-mock --n 64 --seed 7 --quant-step 0.05 --hysteresis 0.03 --budget 48
 
 reproduce-paper:
-	python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts
+	python3 paper_artifacts/reproduce_paper.py -- --verify
 
 verify-forc10:
 	$(MAKE) -C artifacts/forc10 verify

@@ -1,21 +1,15 @@
 use std::process::Command;
 
 #[test]
-fn paper_artifacts_smoke_subset_generates_expected_files() {
-    let tmp = tempfile::tempdir().expect("tempdir");
-    let out = tmp.path().join("paper-artifacts-smoke");
-
-    let status = Command::new("python3")
+fn paper_artifacts_wrapper_requires_evidenceos_authoritative_runner() {
+    let output = Command::new("python3")
         .arg("paper_artifacts/reproduce_paper.py")
-        .arg("--smoke")
-        .arg("--out")
-        .arg(&out)
-        .status()
-        .expect("run smoke artifact generator");
+        .arg("--evidenceos-repo")
+        .arg("/definitely/missing/evidenceos")
+        .output()
+        .expect("run wrapper");
 
-    assert!(status.success());
-    assert!(out.join("index.json").exists());
-    assert!(out.join("exp01.json").exists());
-    assert!(out.join("exp11.json").exists());
-    assert!(out.join("exp12.json").exists());
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("authoritative paper reproduction runner not found"));
 }
