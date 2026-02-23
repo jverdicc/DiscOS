@@ -249,6 +249,26 @@ fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
     outer.finalize().into()
 }
 
+fn daemon_signing_material(request_id: &str, path: &str, timestamp: Option<&str>) -> String {
+    match timestamp {
+        Some(ts) => format!("{request_id}:{path}:{ts}"),
+        None => format!("{request_id}:{path}"),
+    }
+}
+
+#[test]
+fn daemon_signing_material_matches_protocol_contract() {
+    let path = "/evidenceos.v2.EvidenceOS/CreateClaimV2";
+    assert_eq!(
+        daemon_signing_material("req-1", path, None),
+        "req-1:/evidenceos.v2.EvidenceOS/CreateClaimV2"
+    );
+    assert_eq!(
+        daemon_signing_material("req-1", path, Some("1700000000")),
+        "req-1:/evidenceos.v2.EvidenceOS/CreateClaimV2:1700000000"
+    );
+}
+
 async fn spawn_tls_server<F>(interceptor: F) -> std::net::SocketAddr
 where
     F: tonic::service::Interceptor + Send + Sync + Clone + 'static,
@@ -331,27 +351,27 @@ async fn connects_with_tls_and_hmac_auth() {
     let addr = spawn_tls_server(move |request: Request<()>| {
         let request_id = request
             .metadata()
-            .get("x-evidenceos-request-id")
+            .get("x-request-id")
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| Status::unauthenticated("missing request id"))?;
-        let key_id = request
-            .metadata()
-            .get("x-evidenceos-key-id")
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| Status::unauthenticated("missing key id"))?;
-        if key_id != "k-prod" {
-            return Err(Status::unauthenticated("unexpected key id"));
-        }
 
-        let signature_hex = request
+        let signature = request
             .metadata()
             .get("x-evidenceos-signature")
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| Status::unauthenticated("missing signature"))?;
+        let signature_hex = signature
+            .strip_prefix("sha256=")
+            .ok_or_else(|| Status::unauthenticated("invalid signature prefix"))?;
+
+        let timestamp = request
+            .metadata()
+            .get("x-evidenceos-timestamp")
+            .and_then(|v| v.to_str().ok());
 
         let expected = hex::encode(hmac_sha256(
             &secret_for_server,
-            format!("{}:{}", request_id, request.uri().path()).as_bytes(),
+            daemon_signing_material(request_id, request.uri().path(), timestamp).as_bytes(),
         ));
 
         if expected != signature_hex {
