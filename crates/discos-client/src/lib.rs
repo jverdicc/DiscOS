@@ -24,6 +24,7 @@ use std::sync::{
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use evidenceos_auth_protocol::build_hmac_headers;
 use evidenceos_verifier as verifier;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -140,33 +141,49 @@ impl Interceptor for AuthInterceptor {
                 request.metadata_mut().insert("authorization", value);
                 Ok(request)
             }
-            Some(ClientAuth::HmacSha256 { key_id: _, secret }) => {
+            Some(ClientAuth::HmacSha256 { key_id, secret }) => {
                 let request_id = format!("discos-{}", self.nonce.fetch_add(1, Ordering::Relaxed));
-                let request_id_value = MetadataValue::try_from(request_id.as_str())
-                    .map_err(|e| Status::invalid_argument(format!("invalid request id: {e}")))?;
-                request
-                    .metadata_mut()
-                    .insert("x-request-id", request_id_value);
-
                 let timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .map_err(|e| Status::internal(format!("system clock before unix epoch: {e}")))?
                     .as_secs()
                     .to_string();
-                let timestamp_value = MetadataValue::try_from(timestamp.as_str())
-                    .map_err(|e| Status::invalid_argument(format!("invalid timestamp: {e}")))?;
+
+                let headers = build_hmac_headers(
+                    &request_id,
+                    request.uri().path(),
+                    Some(&timestamp),
+                    secret,
+                    Some(key_id),
+                );
+
+                let request_id_value = MetadataValue::try_from(headers.request_id.as_str())
+                    .map_err(|e| Status::invalid_argument(format!("invalid request id: {e}")))?;
                 request
                     .metadata_mut()
-                    .insert("x-evidenceos-timestamp", timestamp_value);
+                    .insert("x-request-id", request_id_value);
 
-                let signing_material =
-                    format!("{}:{}:{}", request_id, request.uri().path(), timestamp);
-                let signature_hex = hex::encode(hmac_sha256(secret, signing_material.as_bytes()));
-                let signature_value = MetadataValue::try_from(format!("sha256={signature_hex}"))
+                if let Some(timestamp) = headers.timestamp {
+                    let timestamp_value = MetadataValue::try_from(timestamp.as_str())
+                        .map_err(|e| Status::invalid_argument(format!("invalid timestamp: {e}")))?;
+                    request
+                        .metadata_mut()
+                        .insert("x-evidenceos-timestamp", timestamp_value);
+                }
+
+                let signature_value = MetadataValue::try_from(headers.signature.as_str())
                     .map_err(|e| Status::invalid_argument(format!("invalid signature: {e}")))?;
                 request
                     .metadata_mut()
                     .insert("x-evidenceos-signature", signature_value);
+
+                if let Some(key_id) = headers.key_id {
+                    let key_id_value = MetadataValue::try_from(key_id.as_str())
+                        .map_err(|e| Status::invalid_argument(format!("invalid key id: {e}")))?;
+                    request
+                        .metadata_mut()
+                        .insert("x-evidenceos-key-id", key_id_value);
+                }
                 Ok(request)
             }
         }
@@ -490,35 +507,6 @@ pub fn sha256(input: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(input);
     hasher.finalize().into()
-}
-
-fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
-    const BLOCK_SIZE: usize = 64;
-
-    let mut key_block = [0u8; BLOCK_SIZE];
-    if key.len() > BLOCK_SIZE {
-        let hashed = sha256(key);
-        key_block[..hashed.len()].copy_from_slice(&hashed);
-    } else {
-        key_block[..key.len()].copy_from_slice(key);
-    }
-
-    let mut ipad = [0x36u8; BLOCK_SIZE];
-    let mut opad = [0x5cu8; BLOCK_SIZE];
-    for i in 0..BLOCK_SIZE {
-        ipad[i] ^= key_block[i];
-        opad[i] ^= key_block[i];
-    }
-
-    let mut inner = Sha256::new();
-    inner.update(ipad);
-    inner.update(data);
-    let inner_hash = inner.finalize();
-
-    let mut outer = Sha256::new();
-    outer.update(opad);
-    outer.update(inner_hash);
-    outer.finalize().into()
 }
 
 pub fn sha256_domain(domain: &[u8], payload: &[u8]) -> [u8; 32] {
