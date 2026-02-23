@@ -1,64 +1,27 @@
-# Reproduce paper artifacts (DiscOS)
+# Reproduce paper artifacts (authoritative path)
 
-This repository vendors a deterministic artifact suite under `paper_artifacts/` so a fresh clone can regenerate paper experiment outputs without downloading external bundles.
+DiscOS no longer ships a local synthetic paper generator. The authoritative FORC10 reproduction pipeline lives in the EvidenceOS repository under `artifacts/forc10/original_python/`.
 
-## One-command entrypoint
+## One authoritative command
 
-```bash
-make reproduce-paper
-```
-
-Expected terminal output includes:
-
-- a JSON line with `"ok": true`
-- `artifacts/paper-artifacts/index.json`
-
-## Outputs
-
-All artifacts are written to:
-
-- `artifacts/paper-artifacts/index.json`
-- `artifacts/paper-artifacts/exp01.json` ... `artifacts/paper-artifacts/exp12.json`
-
-The output path is consistent and can be overridden with:
+From an EvidenceOS checkout:
 
 ```bash
-python3 paper_artifacts/reproduce_paper.py --out <custom-dir>
+make -C artifacts/forc10/original_python verify
 ```
 
-## Paper experiment mapping
+This is the only command path that should be used for reviewer-facing paper reproduction claims.
 
-| Paper experiment | Repo command |
-|---|---|
-| 1 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 1` |
-| 2 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 2` |
-| 3 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 3` |
-| 4 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 4` |
-| 5 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 5` |
-| 6 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 6` |
-| 7 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 7` |
-| 8 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 8` |
-| 9 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 9` |
-| 10 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 10` |
-| 11 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 11` |
-| 12 | `python3 paper_artifacts/reproduce_paper.py --out artifacts/paper-artifacts --experiments 12` |
+## Running from DiscOS (wrapper)
 
-## CI smoke subset
-
-Use the smoke mode in CI to keep runtime low while still validating deterministic generation:
+If you are currently in a DiscOS checkout, use the wrapper script that delegates to EvidenceOS:
 
 ```bash
-python3 paper_artifacts/reproduce_paper.py --smoke --out artifacts/paper-artifacts-smoke
+python3 paper_artifacts/reproduce_paper.py --evidenceos-repo ../EvidenceOS -- --verify
 ```
 
-Smoke mode generates Exp1, Exp11, and Exp12 plus an `index.json`.
+The wrapper fails fast when EvidenceOS is missing and intentionally does not synthesize experiment outputs.
 
-## FORC10 auditable harness
+## Why this changed
 
-For a one-command reproducibility + golden verification workflow used by CI, run:
-
-```bash
-make -C artifacts/forc10 verify
-```
-
-See `artifacts/forc10/README.md` for setup/runtime details and generated output structure.
+Previous DiscOS-local scripts produced deterministic placeholders for several experiments. Those placeholders are no longer acceptable for paper-fidelity claims. DiscOS now links to the EvidenceOS artifact runner as the source of truth.

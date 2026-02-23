@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Deterministic toy experiment modules used for internal validation and tests.
+//!
+//! These modules are **not** the authoritative paper reproduction pipeline.
+//! Reviewer-facing reproduction lives in EvidenceOS (`artifacts/forc10/original_python`).
+
 pub mod exp0;
 pub mod exp1;
 pub mod exp11;
