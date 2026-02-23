@@ -86,6 +86,14 @@ struct Args {
     hmac_secret_hex: Option<String>,
     #[arg(long, default_value_t = false)]
     allow_insecure_certify: bool,
+    #[arg(long, env = "DISCOS_CONNECT_TIMEOUT_MS", default_value_t = discos_client::DEFAULT_CONNECT_TIMEOUT_MS)]
+    connect_timeout_ms: u64,
+    #[arg(long, env = "DISCOS_REQUEST_TIMEOUT_MS", default_value_t = discos_client::DEFAULT_REQUEST_TIMEOUT_MS)]
+    request_timeout_ms: u64,
+    #[arg(long, env = "DISCOS_KEEPALIVE_INTERVAL_MS", default_value_t = discos_client::DEFAULT_KEEPALIVE_INTERVAL_MS)]
+    keepalive_interval_ms: u64,
+    #[arg(long, env = "DISCOS_KEEPALIVE_TIMEOUT_MS", default_value_t = discos_client::DEFAULT_KEEPALIVE_TIMEOUT_MS)]
+    keepalive_timeout_ms: u64,
     #[arg(long, default_value = "info")]
     log: String,
     #[arg(long, env = "DISCOS_KERNEL_PUBKEY_HEX", default_value = "")]
@@ -394,6 +402,10 @@ async fn connect_client(args: &Args) -> anyhow::Result<DiscosClient> {
         endpoint: args.endpoint.clone(),
         tls,
         auth,
+        connect_timeout_ms: args.connect_timeout_ms,
+        request_timeout_ms: args.request_timeout_ms,
+        keepalive_interval_ms: args.keepalive_interval_ms,
+        keepalive_timeout_ms: args.keepalive_timeout_ms,
     })
     .await
     .map_err(|e| anyhow!(e))
@@ -1551,6 +1563,10 @@ feed"
             hmac_key_id: None,
             hmac_secret_hex: None,
             allow_insecure_certify: false,
+            connect_timeout_ms: discos_client::DEFAULT_CONNECT_TIMEOUT_MS,
+            request_timeout_ms: discos_client::DEFAULT_REQUEST_TIMEOUT_MS,
+            keepalive_interval_ms: discos_client::DEFAULT_KEEPALIVE_INTERVAL_MS,
+            keepalive_timeout_ms: discos_client::DEFAULT_KEEPALIVE_TIMEOUT_MS,
             log: "info".to_string(),
             kernel_pubkey_hex: "".to_string(),
             allow_protocol_drift: false,
@@ -1566,5 +1582,45 @@ feed"
         let mut override_args = insecure_args;
         override_args.allow_insecure_certify = true;
         assert!(ensure_certify_transport_security(&override_args).is_ok());
+    }
+    #[test]
+    fn cli_timeout_flags_parse_overrides() {
+        let args = Args::parse_from([
+            "discos",
+            "--connect-timeout-ms",
+            "1111",
+            "--request-timeout-ms",
+            "2222",
+            "--keepalive-interval-ms",
+            "3333",
+            "--keepalive-timeout-ms",
+            "4444",
+            "health",
+        ]);
+        assert_eq!(args.connect_timeout_ms, 1111);
+        assert_eq!(args.request_timeout_ms, 2222);
+        assert_eq!(args.keepalive_interval_ms, 3333);
+        assert_eq!(args.keepalive_timeout_ms, 4444);
+    }
+
+    #[test]
+    fn cli_timeout_flags_default_to_client_defaults() {
+        let args = Args::parse_from(["discos", "health"]);
+        assert_eq!(
+            args.connect_timeout_ms,
+            discos_client::DEFAULT_CONNECT_TIMEOUT_MS
+        );
+        assert_eq!(
+            args.request_timeout_ms,
+            discos_client::DEFAULT_REQUEST_TIMEOUT_MS
+        );
+        assert_eq!(
+            args.keepalive_interval_ms,
+            discos_client::DEFAULT_KEEPALIVE_INTERVAL_MS
+        );
+        assert_eq!(
+            args.keepalive_timeout_ms,
+            discos_client::DEFAULT_KEEPALIVE_TIMEOUT_MS
+        );
     }
 }

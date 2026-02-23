@@ -291,18 +291,18 @@ async fn connects_with_tls_mtls_and_bearer_auth() {
     })
     .await;
 
-    let mut client = DiscosClient::connect_with_config(ClientConnectConfig {
-        endpoint: format!("https://localhost:{addr}"),
-        tls: Some(ClientTlsOptions {
-            ca_cert_pem: CA_CERT_PEM.as_bytes().to_vec(),
-            domain_name: Some("localhost".into()),
-            client_cert_pem: Some(CLIENT_CERT_PEM.as_bytes().to_vec()),
-            client_key_pem: Some(CLIENT_KEY_PEM.as_bytes().to_vec()),
-        }),
-        auth: Some(ClientAuth::BearerToken("discos-token".into())),
-    })
-    .await
-    .expect("connect with tls+bearer");
+    let mut config = ClientConnectConfig::with_endpoint(format!("https://localhost:{addr}"));
+    config.tls = Some(ClientTlsOptions {
+        ca_cert_pem: CA_CERT_PEM.as_bytes().to_vec(),
+        domain_name: Some("localhost".into()),
+        client_cert_pem: Some(CLIENT_CERT_PEM.as_bytes().to_vec()),
+        client_key_pem: Some(CLIENT_KEY_PEM.as_bytes().to_vec()),
+    });
+    config.auth = Some(ClientAuth::BearerToken("discos-token".into()));
+
+    let mut client = DiscosClient::connect_with_config(config)
+        .await
+        .expect("connect with tls+bearer");
 
     assert_eq!(client.health().await.expect("health call").status, "ok");
     assert_eq!(
@@ -362,21 +362,21 @@ async fn connects_with_tls_and_hmac_auth() {
     })
     .await;
 
-    let mut client = DiscosClient::connect_with_config(ClientConnectConfig {
-        endpoint: format!("https://localhost:{addr}"),
-        tls: Some(ClientTlsOptions {
-            ca_cert_pem: CA_CERT_PEM.as_bytes().to_vec(),
-            domain_name: Some("localhost".into()),
-            client_cert_pem: Some(CLIENT_CERT_PEM.as_bytes().to_vec()),
-            client_key_pem: Some(CLIENT_KEY_PEM.as_bytes().to_vec()),
-        }),
-        auth: Some(ClientAuth::HmacSha256 {
-            key_id: "k-prod".into(),
-            secret: shared_secret,
-        }),
-    })
-    .await
-    .expect("connect with tls+hmac");
+    let mut config = ClientConnectConfig::with_endpoint(format!("https://localhost:{addr}"));
+    config.tls = Some(ClientTlsOptions {
+        ca_cert_pem: CA_CERT_PEM.as_bytes().to_vec(),
+        domain_name: Some("localhost".into()),
+        client_cert_pem: Some(CLIENT_CERT_PEM.as_bytes().to_vec()),
+        client_key_pem: Some(CLIENT_KEY_PEM.as_bytes().to_vec()),
+    });
+    config.auth = Some(ClientAuth::HmacSha256 {
+        key_id: "k-prod".into(),
+        secret: shared_secret,
+    });
+
+    let mut client = DiscosClient::connect_with_config(config)
+        .await
+        .expect("connect with tls+hmac");
 
     client.health().await.expect("health call");
     client
