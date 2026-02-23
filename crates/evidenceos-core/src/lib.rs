@@ -19,6 +19,7 @@
 
 pub mod crypto_transcripts;
 pub mod etl;
+pub mod forc;
 pub mod guest_abi;
 pub mod ledger;
 pub mod manifest;
