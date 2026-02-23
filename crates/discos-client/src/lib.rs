@@ -21,7 +21,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
 };
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use evidenceos_verifier as verifier;
@@ -140,26 +140,33 @@ impl Interceptor for AuthInterceptor {
                 request.metadata_mut().insert("authorization", value);
                 Ok(request)
             }
-            Some(ClientAuth::HmacSha256 { key_id, secret }) => {
+            Some(ClientAuth::HmacSha256 { key_id: _, secret }) => {
                 let request_id = format!("discos-{}", self.nonce.fetch_add(1, Ordering::Relaxed));
                 let request_id_value = MetadataValue::try_from(request_id.as_str())
                     .map_err(|e| Status::invalid_argument(format!("invalid request id: {e}")))?;
                 request
                     .metadata_mut()
-                    .insert("x-evidenceos-request-id", request_id_value);
+                    .insert("x-request-id", request_id_value);
 
-                let signing_material = format!("{}:{}", request_id, request.uri().path());
+                let timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|e| Status::internal(format!("system clock before unix epoch: {e}")))?
+                    .as_secs()
+                    .to_string();
+                let timestamp_value = MetadataValue::try_from(timestamp.as_str())
+                    .map_err(|e| Status::invalid_argument(format!("invalid timestamp: {e}")))?;
+                request
+                    .metadata_mut()
+                    .insert("x-evidenceos-timestamp", timestamp_value);
+
+                let signing_material =
+                    format!("{}:{}:{}", request_id, request.uri().path(), timestamp);
                 let signature_hex = hex::encode(hmac_sha256(secret, signing_material.as_bytes()));
-                let signature_value = MetadataValue::try_from(signature_hex)
+                let signature_value = MetadataValue::try_from(format!("sha256={signature_hex}"))
                     .map_err(|e| Status::invalid_argument(format!("invalid signature: {e}")))?;
-                let key_id_value = MetadataValue::try_from(key_id.as_str())
-                    .map_err(|e| Status::invalid_argument(format!("invalid key id: {e}")))?;
                 request
                     .metadata_mut()
                     .insert("x-evidenceos-signature", signature_value);
-                request
-                    .metadata_mut()
-                    .insert("x-evidenceos-key-id", key_id_value);
                 Ok(request)
             }
         }
