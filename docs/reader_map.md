@@ -49,7 +49,7 @@ Read in this order:
 1. [README.md](../README.md)
 2. [docs/START_HERE.md](START_HERE.md)
 3. [docs/README.md](README.md)
-4. [docs/test_coverage_matrix.md](test_coverage_matrix.md)
+4. [docs/TEST_COVERAGE_PARAMETERS.md](TEST_COVERAGE_PARAMETERS.md)
 
 Then run:
 - `cargo fmt --check`

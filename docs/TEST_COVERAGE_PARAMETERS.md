@@ -1,6 +1,8 @@
-# CBRN Structured Claims Test Coverage Matrix
+# Structured Claims Parameter Coverage Appendix
 
 ## Scope
+Parameter-level appendix for [`TEST_COVERAGE_MATRIX.md`](TEST_COVERAGE_MATRIX.md).
+
 Target: `crates/discos-core/src/structured_claims.rs`.
 
 Legend:

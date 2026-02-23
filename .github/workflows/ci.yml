@@ -13,6 +13,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check for case-insensitive filename collisions
+        run: ./scripts/check_case_insensitive_collisions.sh
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -54,6 +57,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check for case-insensitive filename collisions
+        run: ./scripts/check_case_insensitive_collisions.sh
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -64,6 +70,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check for case-insensitive filename collisions
+        run: ./scripts/check_case_insensitive_collisions.sh
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -87,6 +96,9 @@ jobs:
       EVIDENCEOS_PREFLIGHT_URL: http://127.0.0.1:8787
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check for case-insensitive filename collisions
+        run: ./scripts/check_case_insensitive_collisions.sh
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -161,6 +173,9 @@ jobs:
       EVIDENCEOS_REPO: https://github.com/EvidenceOS/evidenceos.git
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check for case-insensitive filename collisions
+        run: ./scripts/check_case_insensitive_collisions.sh
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
