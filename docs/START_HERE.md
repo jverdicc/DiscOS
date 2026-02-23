@@ -29,6 +29,14 @@ Read in this order:
 3. [DiscOS runbook-style lifecycle commands](../README.md#claim-lifecycle-commands)
 4. [Dual-use + misuse policy](DUAL_USE_AND_MISUSE.md)
 
+## If you're validating test guarantees
+
+Read in this order:
+
+1. [Test Coverage Matrix](TEST_COVERAGE_MATRIX.md)
+2. [Test Coverage Parameters Appendix](TEST_COVERAGE_PARAMETERS.md)
+3. [Test Evidence](TEST_EVIDENCE.md)
+
 
 ## ETL FAQ
 
