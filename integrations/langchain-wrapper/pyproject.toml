@@ -29,9 +29,9 @@ langchain = ["langchain-core>=0.2.0"]
 test = ["pytest>=8.0.0"]
 
 [project.urls]
-Homepage = "https://github.com/discos-project/DiscOS"
-Repository = "https://github.com/discos-project/DiscOS"
-Issues = "https://github.com/discos-project/DiscOS/issues"
+Homepage = "https://github.com/jverdicc/DiscOS"
+Repository = "https://github.com/jverdicc/DiscOS"
+Issues = "https://github.com/jverdicc/DiscOS/issues"
 
 [tool.setuptools]
 package-dir = { "" = "." }

@@ -47,7 +47,7 @@ Dual-use enforcement posture is specified in [`docs/DUAL_USE_AND_MISUSE.md`](doc
 - **Default endpoint:** DiscOS uses the EvidenceOS gRPC daemon endpoint on `127.0.0.1:50051`.
 - **HTTP preflight endpoint:** `127.0.0.1:8787` is optional and only applies when CODEX-E7 HTTP preflight support is available in your EvidenceOS deployment.
 - **OpenClaw guard:** The OpenClaw plugin requires the EvidenceOS HTTP preflight endpoint (`POST /v1/preflight_tool_call`); see [`integrations/openclaw-plugin/README.md`](integrations/openclaw-plugin/README.md).
-- **LangChain wrapper:** The LangChain/LangGraph wrapper remains smoke-test scope until a full production wrapper is implemented; see [`integrations/langchain-wrapper/README.md`](integrations/langchain-wrapper/README.md).
+- **LangChain wrapper:** The LangChain/LangGraph wrapper is **Beta (sync-only)** with tested preflight integration against EvidenceOS CODEX-E7; see [`integrations/langchain-wrapper/README.md`](integrations/langchain-wrapper/README.md).
 
 ## Quickstart
 

@@ -28,6 +28,12 @@ This package targets the EvidenceOS **CODEX-E7** HTTP preflight endpoint:
   - optional `rewrittenParams` (legacy fallback: `rewritten_params`)
   - optional `budgetDelta` (legacy fallback: `budget_delta`)
 
+## Compatibility matrix
+
+- **LangChain support:** `langchain-core>=0.2.0` (validated against the current wrapper test suite).
+- **Execution modes:** synchronous `invoke`/callback flow is supported; async (`ainvoke`/async callbacks) is not implemented yet.
+- **Auth options:** Bearer token (`Authorization: Bearer <token>`) is supported; HMAC signing is not supported in this wrapper.
+
 ## Install
 
 ```bash
