@@ -66,6 +66,40 @@ cargo run -p discos-cli -- --endpoint http://127.0.0.1:50051 claim fetch-capsule
 
 For a fuller scenario-oriented walkthrough, use the canonical docs and examples: [docs/START_HERE.md](docs/START_HERE.md) and [examples/exfiltration_demo/](examples/exfiltration_demo/).
 
+
+## Blackbox toy model (end-to-end, reviewer quick check)
+
+This toy scenario treats EvidenceOS as a strict black box while an adaptive client tries to exfiltrate bits from a hidden oracle boundary.
+For each oracle call with output alphabet size `|Y|`, EvidenceOS charges `k_i = log2(|Y|)` bits **after** canonical-encoding checks pass.
+If canonical encoding is invalid, the request is rejected before charging, so malformed probes do not “spend” leakage budget.
+Across calls, EvidenceOS tracks `k_tot = Σ k_i` and tightens confidence by `alpha' = alpha * 2^{-k_tot}`.
+A claim can only be certified when evidence mass reaches `E >= 2^{k_tot}/alpha`; otherwise policy converges to throttle/freeze.
+All adaptive probing must pass `CreateClaimV2 → Freeze → Seal → Execute`; attempts to bypass lifecycle are rejected.
+
+Pseudo-CLI transcript (existing `discos-cli` flow, shortened):
+
+```bash
+$ discos-cli claim create --claim-name toy-blackbox --oracle-num-symbols 8 --alpha-micros 50000
+{"claim_id":"c_toy","alpha":0.05,"state":"CREATED"}
+$ discos-cli claim commit --claim-id c_toy --wasm ... --manifests ...
+{"claim_id":"c_toy","state":"COMMITTED"}
+$ discos-cli claim freeze --claim-id c_toy
+{"claim_id":"c_toy","state":"FROZEN"}
+$ discos-cli claim seal --claim-id c_toy
+{"claim_id":"c_toy","state":"SEALED"}
+$ discos-cli claim execute --claim-id c_toy --query "q1"
+{"status":"ALLOW","|Y|":8,"k_i":3,"k_tot":3,"alpha_prime":0.00625}
+$ discos-cli claim execute --claim-id c_toy --query "malformed_noncanonical"
+{"status":"REJECT_NONCANONICAL","charged":0}
+$ discos-cli claim execute --claim-id c_toy --query "q2_adaptive"
+{"status":"THROTTLE","k_i":3,"k_tot":6,"certify_requires":"E >= 2^6/0.05 = 1280"}
+$ discos-cli claim execute --claim-id c_toy --query "q3_adaptive"
+{"status":"FROZEN","reason":"budget_exhausted_before_certify"}
+```
+
+For the fuller operator path and harness-backed scenarios, start with [docs/START_HERE.md](docs/START_HERE.md) and [docs/EPISTEMIC_TRIAL_HARNESS.md](docs/EPISTEMIC_TRIAL_HARNESS.md).
+The complete blackbox narrative remains in [docs/THREAT_MODEL_BLACKBOX.md](docs/THREAT_MODEL_BLACKBOX.md).
+
 ## Docs map
 
 - Start here (onboarding): [docs/START_HERE.md](docs/START_HERE.md)

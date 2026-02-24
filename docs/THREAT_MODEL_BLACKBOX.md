@@ -87,6 +87,12 @@ When response latency tracks secret-dependent branches, a client may infer hidde
 
 ---
 
+
+## Quick links for reproducing the blackbox flow
+
+- Onboarding and exact command paths: [docs/START_HERE.md](START_HERE.md)
+- Scenario harness and deterministic trial runs: [docs/EPISTEMIC_TRIAL_HARNESS.md](EPISTEMIC_TRIAL_HARNESS.md)
+
 ## Glossary bridge (quick translation)
 
 > **`leakage k`** = transcript support budget (how much distinguishable signal interaction can carry), **not** a cryptocurrency token.
