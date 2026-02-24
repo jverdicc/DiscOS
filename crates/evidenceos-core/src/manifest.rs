@@ -1,5 +1,6 @@
 use serde::Serialize;
 use serde_json::{Map, Value};
+use std::io;
 
 fn write_canonical(value: &Value, out: &mut String) -> Result<(), serde_json::Error> {
     match value {
@@ -36,7 +37,13 @@ fn write_canonical_object(
         }
         out.push_str(&serde_json::to_string(key)?);
         out.push(':');
-        write_canonical(entries.get(*key).expect("key exists"), out)?;
+        let entry = entries.get(*key).ok_or_else(|| {
+            serde_json::Error::io(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "canonical JSON key lookup failed",
+            ))
+        })?;
+        write_canonical(entry, out)?;
     }
     out.push('}');
     Ok(())
@@ -66,5 +73,13 @@ mod tests {
             canonical,
             r#"{"a":{"c":true,"z":1},"arr":[{"k1":1,"k2":2}],"b":2}"#
         );
+    }
+
+    #[test]
+    fn canonical_json_bytes_matches_canonical_string_encoding() {
+        let value = serde_json::json!({"b": 2, "a": 1});
+        let canonical_string = canonical_json_string(&value).expect("canonical string");
+        let canonical_bytes = canonical_json_bytes(&value).expect("canonical bytes");
+        assert_eq!(canonical_bytes, canonical_string.into_bytes());
     }
 }
