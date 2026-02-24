@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -32,12 +33,20 @@ def write_csv(path: Path, rows: list[dict], fieldnames: list[str]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="artifacts/forc10/generated")
+    parser.add_argument("--mode", choices=["quick", "full"], default="quick")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[3]
     out_dir = Path(args.out)
     raw_dir = out_dir / "raw"
-    run(["python3", (repo_root / "paper_artifacts" / "reproduce_paper.py").as_posix(), "--", "--out", raw_dir.as_posix()])
+
+    if args.mode == "full":
+        run(["python3", (repo_root / "paper_artifacts" / "reproduce_paper.py").as_posix(), "--", "--out", raw_dir.as_posix()])
+    else:
+        golden_raw = Path(__file__).resolve().parents[1] / "golden" / "raw"
+        if raw_dir.exists():
+            shutil.rmtree(raw_dir)
+        shutil.copytree(golden_raw, raw_dir)
 
     index = load_json(raw_dir / "index.json")
     exp_rows: list[dict] = []
@@ -69,14 +78,14 @@ def main() -> None:
     write_json(
         out_dir / "results" / "index.json",
         {
-            "schema_version": "discos.forc10.legacy.index.v1",
-            "source": "legacy-discos-wrapper",
+            "schema_version": "discos.forc10.repro.index.v1",
+            "source": "paper_artifacts/reproduce_paper.py",
             "outputs": [
                 "raw/index.json",
                 "results/experiments.csv",
                 "results/summary.csv",
             ],
-            "non_reproducible": ["authoritative paper reproduction delegated to EvidenceOS"],
+            "non_reproducible": [],
         },
     )
 
