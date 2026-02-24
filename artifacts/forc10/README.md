@@ -1,18 +1,42 @@
-# FORC10 local harness (legacy, non-authoritative)
+# FORC10 reproduction entrypoint (DiscOS wrapper)
 
-> **Status:** Legacy compatibility harness for DiscOS-internal deterministic checks.
-> It is **not** the authoritative paper reproduction path.
+This directory exposes two explicit verification modes so reviewers can distinguish fast local checks from paper-faithful reproduction.
 
-## Authoritative paper reproduction
+## Modes
 
-Use EvidenceOS instead:
+### QUICK (CI-friendly, no network)
+
+Runs the DiscOS-local deterministic compatibility harness:
 
 ```bash
-make -C ../EvidenceOS/artifacts/forc10/original_python verify
+make -C artifacts/forc10 verify
+# equivalent: make -C artifacts/forc10 MODE=quick verify
 ```
 
-(or run the DiscOS wrapper: `python3 paper_artifacts/reproduce_paper.py --evidenceos-repo ../EvidenceOS -- --verify`).
+What QUICK covers:
+- deterministic regeneration of the committed legacy result/figure subset in `artifacts/forc10/golden`
+- parity checks via `scripts/verify.py`
 
-## Why this directory still exists
+What QUICK does **not** cover:
+- authoritative paper artifact bundle execution
+- complete paper figure/table regeneration from the original Python pipeline
 
-The scripts and committed outputs here are retained only for backward-compatible CI/regression checks in DiscOS. They should be treated as toy/legacy outputs and must not be cited as paper-fidelity reproductions.
+### FULL (paper-faithful)
+
+Runs the authoritative Python reproduction path through EvidenceOS after fetching the DOI artifact bundle and verifying its checksum:
+
+```bash
+make -C artifacts/forc10 MODE=full verify EVIDENCEOS_REPO=../EvidenceOS
+```
+
+FULL mode behavior:
+1. Downloads the bundle URL pinned in `FULL_ARTIFACT_MANIFEST.json`.
+2. Verifies the bundle SHA-256 from that manifest.
+3. Refuses to continue on checksum mismatch.
+4. Delegates execution to `paper_artifacts/reproduce_paper.py`, which runs EvidenceOS `artifacts/forc10/original_python/run_all.py --verify`.
+
+## Files
+
+- `FULL_ARTIFACT_MANIFEST.json`: DOI URL + pinned SHA-256 + pinned EvidenceOS commit.
+- `../../scripts/fetch_forc10_artifacts.sh`: download + SHA-256 verification helper.
+- `scripts/`: DiscOS legacy deterministic harness used by QUICK mode only.

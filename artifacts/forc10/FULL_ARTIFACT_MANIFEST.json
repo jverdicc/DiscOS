@@ -1,0 +1,26 @@
+{
+  "schema_version": "discos.forc10.full-manifest.v1",
+  "paper": {
+    "doi": "10.5281/zenodo.18692345",
+    "record_url": "https://doi.org/10.5281/zenodo.18692345"
+  },
+  "artifact": {
+    "bundle_filename": "forc10_full_artifacts.tar.gz",
+    "bundle_url": "https://zenodo.org/records/18692345/files/forc10_full_artifacts.tar.gz?download=1",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "authoritative_runner": {
+    "repository": "https://github.com/jverdicc/EvidenceOS.git",
+    "pinned_commit": "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af",
+    "path": "artifacts/forc10/original_python/run_all.py"
+  },
+  "reproduces": {
+    "figures": [
+      "all figures referenced in the PDF experiment section"
+    ],
+    "tables": [
+      "all tables referenced in the PDF experiment section"
+    ],
+    "exclusions": []
+  }
+}

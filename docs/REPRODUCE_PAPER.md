@@ -1,28 +1,39 @@
-# Reproduce paper artifacts (authoritative path)
+# Reproduce paper artifacts
 
-DiscOS no longer ships a local synthetic paper generator. The authoritative FORC10 reproduction pipeline lives in the EvidenceOS repository under `artifacts/forc10/original_python/`.
-Specifically, DiscOS does **not** provide local `exp1`/`exp2` paper experiment implementations; those placeholders were removed from `discos-core` to avoid misleading reviewer workflows.
+DiscOS provides a two-lane reproduction story so reviewers can run fast CI-safe checks or the full paper-faithful pipeline.
 
-## One authoritative command
-
-From an EvidenceOS checkout:
+## 1) QUICK verify (CI-friendly, no network)
 
 ```bash
-make -C artifacts/forc10/original_python verify
+make -C artifacts/forc10 verify
 ```
 
-This is the only command path that should be used for reviewer-facing paper reproduction claims.
+This runs `MODE=quick` by default and verifies the deterministic DiscOS-local compatibility harness against committed golden outputs.
 
-## Running from DiscOS (wrapper)
+**Covers:** deterministic regeneration + comparison of local legacy result/figure subset.
 
-If you are currently in a DiscOS checkout, use the wrapper script that delegates to EvidenceOS:
+**Does not cover:** authoritative full paper artifact bundle and complete Python paper pipeline.
+
+## 2) FULL reproduction (paper-faithful)
 
 ```bash
-python3 paper_artifacts/reproduce_paper.py --evidenceos-repo ../EvidenceOS -- --verify
+make -C artifacts/forc10 MODE=full verify EVIDENCEOS_REPO=../EvidenceOS
 ```
 
-The wrapper fails fast when EvidenceOS is missing and intentionally does not synthesize experiment outputs.
+FULL mode is strict:
+1. Fetches the DOI bundle pinned in `artifacts/forc10/FULL_ARTIFACT_MANIFEST.json`.
+2. Verifies SHA-256 exactly against the manifest.
+3. Aborts on checksum mismatch.
+4. Runs the authoritative EvidenceOS Python runner (`artifacts/forc10/original_python/run_all.py --verify`) through `paper_artifacts/reproduce_paper.py`.
 
-## Why this changed
+## Paper/code relationship (Python paper DiscOS vs Rust mainline DiscOS)
 
-Previous DiscOS-local scripts produced deterministic placeholders for several experiments. Those placeholders are no longer acceptable for paper-fidelity claims. DiscOS now links to the EvidenceOS artifact runner as the source of truth.
+- The paper experiments were produced with the archived Python artifact pipeline hosted in EvidenceOS.
+- Mainline DiscOS in this repository is Rust.
+- Reviewer-facing paper-fidelity claims therefore point to the authoritative archived Python path in EvidenceOS, while DiscOS QUICK mode remains a deterministic local compatibility check.
+
+## Pinned references used by FULL mode
+
+- DOI record: `10.5281/zenodo.18692345`
+- EvidenceOS runner commit: `4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af`
+- Manifest: `artifacts/forc10/FULL_ARTIFACT_MANIFEST.json`
