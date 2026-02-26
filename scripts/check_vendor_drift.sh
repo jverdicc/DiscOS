@@ -10,6 +10,9 @@ if [[ ! -f "${LOCK_FILE}" ]]; then
   exit 1
 fi
 
+# shellcheck disable=SC2153
+external_repo="${EVIDENCEOS_REPO:-}"
+external_rev="${EVIDENCEOS_REV:-}"
 # shellcheck disable=SC1090
 source "${LOCK_FILE}"
 
@@ -17,9 +20,13 @@ upstream_repo="${EVIDENCEOS_REPO}"
 upstream_rev="${EVIDENCEOS_REV}"
 if [[ -n "${EVIDENCEOS_REPO_OVERRIDE:-}" ]]; then
   upstream_repo="${EVIDENCEOS_REPO_OVERRIDE}"
+elif [[ -n "${external_repo}" ]]; then
+  upstream_repo="${external_repo}"
 fi
 if [[ -n "${EVIDENCEOS_REV_OVERRIDE:-}" ]]; then
   upstream_rev="${EVIDENCEOS_REV_OVERRIDE}"
+elif [[ -n "${external_rev}" ]]; then
+  upstream_rev="${external_rev}"
 fi
 
 if [[ -z "${upstream_repo}" || -z "${upstream_rev}" ]]; then

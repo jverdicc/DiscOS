@@ -8,7 +8,7 @@ env:
   # Canonical EvidenceOS upstream; can be overridden at repo/org level via Actions variable.
   EVIDENCEOS_REPO: ${{ vars.EVIDENCEOS_REPO || 'https://github.com/jverdicc/EvidenceOS.git' }}
   # Immutable compatibility pin used by proto/vendor checks and daemon integration jobs.
-  EVIDENCEOS_REV: 4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af
+  EVIDENCEOS_REV: ${{ vars.EVIDENCEOS_REV || '4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af' }}
 
 jobs:
   test:
@@ -34,6 +34,8 @@ jobs:
         run: ./scripts/check_proto_drift.sh
 
       - name: Verify vendored EvidenceOS crates are pinned and drift-free
+        env:
+          EVIDENCEOS_REV_OVERRIDE: ${{ env.EVIDENCEOS_REV }}
         run: ./scripts/check_vendor_drift.sh
 
       - name: Install coverage and fuzz tooling
