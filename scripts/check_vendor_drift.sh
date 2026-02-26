@@ -34,6 +34,8 @@ if [[ -z "${upstream_repo}" || -z "${upstream_rev}" ]]; then
   exit 1
 fi
 
+EVIDENCEOS_REPO="${upstream_repo}" EVIDENCEOS_REV="${upstream_rev}" "${SCRIPT_DIR}/validate_evidenceos_pin.sh"
+
 upstream_git_dir=""
 temp_dir=""
 cleanup() {
@@ -54,14 +56,14 @@ else
   upstream_git_dir="${temp_dir}/EvidenceOS"
   git init -q "${upstream_git_dir}"
   git -C "${upstream_git_dir}" remote add origin "${upstream_repo}"
-  git -C "${upstream_git_dir}" fetch --depth 1 origin "${upstream_rev}" >/dev/null 2>&1 || {
-    echo "[FAIL] Unable to fetch ${upstream_rev} from ${upstream_repo}." >&2
+  git -C "${upstream_git_dir}" fetch --depth 1 origin "refs/tags/${upstream_rev}:refs/tags/${upstream_rev}" >/dev/null 2>&1 || {
+    echo "[FAIL] Unable to fetch tag ${upstream_rev} from ${upstream_repo}." >&2
     exit 1
   }
 fi
 
 if ! git -C "${upstream_git_dir}" cat-file -e "${upstream_rev}^{commit}" 2>/dev/null; then
-  echo "[FAIL] Commit ${upstream_rev} not found in ${upstream_git_dir}." >&2
+  echo "[FAIL] Tag/commit ${upstream_rev} not found in ${upstream_git_dir}." >&2
   exit 1
 fi
 
@@ -117,7 +119,7 @@ done
 if [[ ${status} -ne 0 ]]; then
   cat >&2 <<'MSG'
 
-Vendored EvidenceOS crates have drifted from the pinned upstream commit.
+Vendored EvidenceOS crates have drifted from the pinned upstream tag/commit.
 If this change is intentional, update scripts/evidenceos_vendor.lock and synchronize files mechanically.
 MSG
   exit 1
