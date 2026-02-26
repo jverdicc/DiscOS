@@ -7,7 +7,7 @@
 DiscOS is the untrusted operator/client layer for the EvidenceOS verifier boundary.
 It prepares deterministic claim artifacts and orchestrates claim lifecycle RPCs.
 EvidenceOS enforces policy, validates commitments, and publishes verifiable evidence.
-Together, they implement UVP (Universal Verification Profile) for bounded adaptive evaluation.
+Together, they implement the Universal Verification Protocol (UVP) for bounded adaptive evaluation.
 The lifecycle is explicit and stateful: `allow`, `throttle`, `freeze`, `escalate`.
 Outputs are machine-parseable and include verification artifacts (capsules + ETL proofs).
 DiscOS emphasizes deterministic simulations, reproducible workflows, and stress harnesses.
@@ -15,11 +15,15 @@ Interoperability is anchored to EvidenceOS gRPC/proto compatibility and versioni
 This repository is for operator workflows, integrations, examples, and defensive experimentation.
 It is not a claim of perfect safety; it is an auditable containment and governance toolchain.
 
-➡️ EvidenceOS repository: <https://github.com/jverdicc/EvidenceOS>
+➡️ EvidenceOS repository: [jverdicc/EvidenceOS](https://github.com/jverdicc/EvidenceOS)
 
-➡️ Clinical trials / Epistemic Trial Harness (implemented in EvidenceOS):
-- <https://github.com/jverdicc/EvidenceOS/blob/main/docs/EPISTEMIC_TRIAL_HARNESS.md>
-- <https://github.com/jverdicc/EvidenceOS/blob/main/docs/TRIAL_HARNESS_ANALYSIS.md>
+➡️ Clinical trials / Epistemic Trial Harness (implemented in EvidenceOS): [EPISTEMIC_TRIAL_HARNESS.md](https://github.com/jverdicc/EvidenceOS/blob/main/docs/EPISTEMIC_TRIAL_HARNESS.md), [TRIAL_HARNESS_ANALYSIS.md](https://github.com/jverdicc/EvidenceOS/blob/main/docs/TRIAL_HARNESS_ANALYSIS.md)
+
+## Artifact note (paper vs current repo)
+
+Paper prototype used a Python DiscOS harness for simulations; current DiscOS is Rust; the archived simulation harness remains available under EvidenceOS artifacts for parity.
+
+FORC reproduction artifact location (authoritative archived runner): [EvidenceOS `artifacts/forc10/original_python/run_all.py` @ `4c1d7f2`](https://github.com/jverdicc/EvidenceOS/blob/4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af/artifacts/forc10/original_python/run_all.py).
 
 ## Quickstart
 
