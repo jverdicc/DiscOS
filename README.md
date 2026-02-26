@@ -17,6 +17,10 @@ It is not a claim of perfect safety; it is an auditable containment and governan
 
 ➡️ EvidenceOS repository: <https://github.com/jverdicc/EvidenceOS>
 
+➡️ Clinical trials / Epistemic Trial Harness (implemented in EvidenceOS):
+- <https://github.com/jverdicc/EvidenceOS/blob/main/docs/EPISTEMIC_TRIAL_HARNESS.md>
+- <https://github.com/jverdicc/EvidenceOS/blob/main/docs/TRIAL_HARNESS_ANALYSIS.md>
+
 ## Quickstart
 
 ### 1) Run EvidenceOS
@@ -97,7 +101,7 @@ $ discos-cli claim execute --claim-id c_toy --query "q3_adaptive"
 {"status":"FROZEN","reason":"budget_exhausted_before_certify"}
 ```
 
-For the fuller operator path and harness-backed scenarios, start with [docs/START_HERE.md](docs/START_HERE.md) and [docs/EPISTEMIC_TRIAL_HARNESS.md](docs/EPISTEMIC_TRIAL_HARNESS.md).
+For the fuller operator path and harness-backed scenarios, start with [docs/START_HERE.md](docs/START_HERE.md) and the EvidenceOS harness docs: [EPISTEMIC_TRIAL_HARNESS.md](https://github.com/jverdicc/EvidenceOS/blob/main/docs/EPISTEMIC_TRIAL_HARNESS.md).
 The complete blackbox narrative remains in [docs/THREAT_MODEL_BLACKBOX.md](docs/THREAT_MODEL_BLACKBOX.md).
 
 ## Docs map
@@ -108,6 +112,7 @@ The complete blackbox narrative remains in [docs/THREAT_MODEL_BLACKBOX.md](docs/
 - Threat model worked example: [docs/threat_model_worked_example.md](docs/threat_model_worked_example.md)
 - UVP blackbox interface: [docs/uvp_blackbox_interface.md](docs/uvp_blackbox_interface.md)
 - Protocol versioning/interoperability policy: [docs/PROTOCOL_VERSIONING.md](docs/PROTOCOL_VERSIONING.md)
+- Clinical trials / Epistemic Trial Harness (EvidenceOS): [docs/EPISTEMIC_TRIAL_HARNESS.md](https://github.com/jverdicc/EvidenceOS/blob/main/docs/EPISTEMIC_TRIAL_HARNESS.md), [docs/TRIAL_HARNESS_ANALYSIS.md](https://github.com/jverdicc/EvidenceOS/blob/main/docs/TRIAL_HARNESS_ANALYSIS.md)
 
 ## Integrations
 
