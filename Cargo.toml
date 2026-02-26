@@ -26,3 +26,8 @@ repository = "https://github.com/jverdicc/DiscOS"
 evidenceos-protocol = { git = "https://github.com/jverdicc/EvidenceOS.git", rev = "4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af" }
 evidenceos-verifier = { path = "crates/evidenceos-verifier", version = "0.1.0" }
 evidenceos-auth-protocol = { path = "crates/evidenceos-auth-protocol", version = "0.1.0" }
+
+[patch."https://github.com/jverdicc/EvidenceOS.git"]
+evidenceos-protocol = { path = "../EvidenceOS/crates/evidenceos-protocol" }
+# Add any other EvidenceOS crates that DiscOS depends on here, for example:
+# evidenceos-core = { path = "../EvidenceOS/crates/evidenceos-core" }
