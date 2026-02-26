@@ -16,6 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Bootstrap CI artifacts directory
+        run: mkdir -p artifacts/ci && echo "bootstrap" > artifacts/ci/_ci_bootstrap.txt
+
       - name: Check for case-insensitive filename collisions
         run: ./scripts/check_case_insensitive_collisions.sh
 
