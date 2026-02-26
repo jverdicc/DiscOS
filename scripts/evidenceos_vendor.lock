@@ -1,8 +1,9 @@
 # Pinned upstream source for vendored EvidenceOS crates.
+# Temporary canonical upstream until EvidenceOS org repository is restored.
 EVIDENCEOS_REPO="https://github.com/jverdicc/EvidenceOS.git"
-EVIDENCEOS_REV="forc-submission-v1.0"
+EVIDENCEOS_REV="4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af"
 
-# Vendored crates that must remain byte-identical to the pinned tag.
+# Vendored crates that must remain byte-identical to the pinned commit.
 EVIDENCEOS_VENDORED_CRATES=(
   "crates/evidenceos-auth-protocol"
   "crates/evidenceos-core"
