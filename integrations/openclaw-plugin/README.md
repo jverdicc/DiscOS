@@ -22,6 +22,10 @@ This plugin is designed to be a drop-in safety middleware for OpenClaw:
 - **High priority hook** (`priority: 1000`) to reduce ordering conflicts.
 - **No `block: false` emission** to avoid accidental merge semantics override.
 
+## Developer requirements
+
+- Node.js **>= 22.6.0** is required to run tests because the test workflow relies on Node's TypeScript type-stripping support (`--experimental-strip-types`).
+
 ## Install
 
 ```bash
