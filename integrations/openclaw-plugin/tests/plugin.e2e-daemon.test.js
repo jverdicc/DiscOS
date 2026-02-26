@@ -2,25 +2,25 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 
-import { createEvidenceGuardPlugin } from "../src/index.ts";
+import { createEvidenceGuardPlugin } from "../dist/index.js";
 
 const EVIDENCEOS_URL = process.env.EVIDENCEOS_PREFLIGHT_URL;
 
-async function startProxy(targetBaseUrl: string) {
-  const seenRequestIds: string[] = [];
+async function startProxy(targetBaseUrl) {
+  const seenRequestIds = [];
   const server = http.createServer((req, res) => {
     const requestId = req.headers["x-request-id"];
     if (typeof requestId === "string" && requestId.length > 0) {
       seenRequestIds.push(requestId);
     }
 
-    const chunks: Buffer[] = [];
+    const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));
     req.on("end", async () => {
       try {
         const upstream = await fetch(`${targetBaseUrl}${req.url ?? ""}`, {
           method: req.method,
-          headers: req.headers as Record<string, string>,
+          headers: req.headers,
           body: chunks.length > 0 ? Buffer.concat(chunks) : undefined,
         });
 
@@ -35,7 +35,7 @@ async function startProxy(targetBaseUrl: string) {
     });
   });
 
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
   const address = server.address();
   if (!address || typeof address === "string") {
     throw new Error("proxy bind failed");
@@ -45,14 +45,14 @@ async function startProxy(targetBaseUrl: string) {
     baseUrl: `http://127.0.0.1:${address.port}`,
     seenRequestIds,
     close: () =>
-      new Promise<void>((resolve, reject) => {
+      new Promise((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
       }),
   };
 }
 
 test("e2e preflight contract against daemon via plugin path", { skip: !EVIDENCEOS_URL }, async () => {
-  const proxy = await startProxy(EVIDENCEOS_URL!);
+  const proxy = await startProxy(EVIDENCEOS_URL);
   const plugin = createEvidenceGuardPlugin({
     evidenceUrl: proxy.baseUrl,
     failClosedRisk: "all",

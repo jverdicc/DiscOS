@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 
-import { createEvidenceGuardPlugin } from "../src/index.ts";
+import { createEvidenceGuardPlugin } from "../dist/index.js";
 
 test("integration: plugin sends required headers and applies policy response contract", async () => {
-  let observedRequestId: string | undefined;
-  let observedAuth: string | undefined;
+  let observedRequestId;
+  let observedAuth;
 
   const server = http.createServer((req, res) => {
     if (req.method !== "POST" || req.url !== "/v1/preflight_tool_call") {
@@ -15,10 +15,10 @@ test("integration: plugin sends required headers and applies policy response con
       return;
     }
 
-    observedRequestId = req.headers["x-request-id"] as string | undefined;
+    observedRequestId = req.headers["x-request-id"];
     observedAuth = req.headers.authorization;
 
-    const chunks: Buffer[] = [];
+    const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));
     req.on("end", () => {
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
@@ -36,7 +36,7 @@ test("integration: plugin sends required headers and applies policy response con
     });
   });
 
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
   const address = server.address();
   if (!address || typeof address === "string") {
     server.close();
@@ -62,7 +62,7 @@ test("integration: plugin sends required headers and applies policy response con
     assert.equal(denied.block, true);
     assert.match(denied.blockReason ?? "", /PolicyDeny/);
   } finally {
-    await new Promise<void>((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       server.close((err) => {
         if (err) reject(err);
         else resolve();

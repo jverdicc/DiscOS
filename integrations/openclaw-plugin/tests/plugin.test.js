@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   createEvidenceGuardPlugin,
   parseEvidenceGuardPluginConfig,
-} from "../src/index.ts";
+} from "../dist/index.js";
 
 test("parseEvidenceGuardPluginConfig applies defaults and overrides", () => {
   const config = parseEvidenceGuardPluginConfig({
@@ -78,7 +78,7 @@ test("before_tool_call fails closed on timeout for high-risk tools", async () =>
 });
 
 test("circuit breaker opens after threshold and then resets", async () => {
-  const calls: string[] = [];
+  const calls = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => {
     calls.push("called");
@@ -142,8 +142,8 @@ test("default audit logger emits deterministic one-line JSON", () => {
   });
 
   const originalLog = console.log;
-  const lines: string[] = [];
-  console.log = (line: string) => {
+  const lines = [];
+  console.log = (line) => {
     lines.push(line);
   };
 

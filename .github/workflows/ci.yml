@@ -153,7 +153,7 @@ jobs:
         working-directory: integrations/openclaw-plugin
         run: |
           npm ci
-          node --test --experimental-strip-types tests/plugin.e2e-daemon.test.ts
+          node --test tests/plugin.e2e-daemon.test.js
 
       - name: Run langchain-wrapper daemon preflight e2e test
         working-directory: integrations/langchain-wrapper
