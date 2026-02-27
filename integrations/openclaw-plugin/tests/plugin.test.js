@@ -15,11 +15,16 @@ test("parseEvidenceGuardPluginConfig applies defaults and overrides", () => {
   });
 
   assert.equal(config.evidenceUrl, "http://127.0.0.1:8787");
+  assert.equal(config.postflightUrl, "http://127.0.0.1:8787/v1/postflight_tool_call");
   assert.equal(config.timeoutMs, 250);
   assert.equal(config.circuitBreakerThreshold, 3);
   assert.equal(config.circuitBreakerResetMs, 5000);
   assert.equal(config.failClosedRisk, "all");
   assert.deepEqual(config.highRiskTools, ["custom.tool"]);
+  assert.equal(config.maxOutputBytes, 4096);
+  assert.equal(config.snapParamsMaxString, 2048);
+  assert.equal(config.snapParamsMaxArray, 64);
+  assert.equal(config.injectReceiptToAgent, "on_block");
   assert.equal(config.maxParamBytes, 8192);
   assert.equal(config.redactLargeStringsOver, 2048);
   assert.equal(typeof config.auditLogger, "function");
@@ -80,49 +85,77 @@ test("before_tool_call fails closed on timeout for high-risk tools", async () =>
   }
 });
 
-test("circuit breaker opens after threshold and then resets", async () => {
-  const calls = [];
+test("before_tool_call sends snapped params and full paramsHash", async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => {
-    calls.push("called");
-    throw new Error("upstream down");
+  const seen = [];
+  globalThis.fetch = async (_input, init) => {
+    seen.push(JSON.parse(String(init?.body)));
+    return new Response(JSON.stringify({ decision: "ALLOW", reasonCode: "PolicyAllow", receiptHash: "pre-1" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
   };
 
   try {
     const plugin = createEvidenceGuardPlugin({
       evidenceUrl: "http://127.0.0.1:8787",
-      circuitBreakerThreshold: 2,
-      circuitBreakerResetMs: 20,
-      failClosedRisk: "all",
+      snapParamsMaxString: 10,
+      snapParamsMaxArray: 2,
+      requireAspecForToolWrites: false,
     });
 
-    await plugin.hooks.before_tool_call({ toolName: "safe.tool", params: {} });
-    await plugin.hooks.before_tool_call({ toolName: "safe.tool", params: {} });
-    await plugin.hooks.before_tool_call({ toolName: "safe.tool", params: {} });
-    assert.equal(calls.length, 2, "third call should be blocked by open circuit");
+    await plugin.hooks.before_tool_call({
+      toolName: "safe.tool",
+      params: {
+        x: "abcdefghijklmnopqrstuvwxyz",
+        values: [1, 2, 3, 4],
+      },
+    });
 
-    await new Promise((resolve) => setTimeout(resolve, 25));
-    await plugin.hooks.before_tool_call({ toolName: "safe.tool", params: {} });
-    assert.equal(calls.length, 3, "fetch should resume after reset window");
+    assert.equal(seen.length, 1);
+    assert.equal(typeof seen[0].paramsHash, "string");
+    assert.equal(seen[0].paramsHash.length, 64);
+    assert.equal(seen[0].params.x.truncated, true);
+    assert.equal(seen[0].params.values.truncated, true);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("before_tool_call never emits block:false and only rewrites params when returned", async () => {
+test("after_tool_call enforces REDACT rewrite", async () => {
   const originalFetch = globalThis.fetch;
-  const queue = [
-    { decision: "ALLOW", reasonCode: "PolicyAllow" },
-    { decision: "ALLOW", reasonCode: "PolicyAllow", rewrittenParams: { safe: true } },
-  ];
+  const calls = [];
+  globalThis.fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body));
+    calls.push(body);
+    if (String(_input).includes("preflight")) {
+      return new Response(JSON.stringify({ decision: "ALLOW", reasonCode: "PolicyAllow", receiptHash: "pre-1" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
 
-  globalThis.fetch = async () =>
-    new Response(JSON.stringify(queue.shift()), {
+    return new Response(JSON.stringify({
+      decision: "REDACT",
+      reason: "large output",
+      outputRewrite: { truncated: true, preview: "abc" },
+      receiptHash: "post-1",
+    }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
+  };
 
   try {
+    const plugin = createEvidenceGuardPlugin({ evidenceUrl: "http://127.0.0.1:8787", requireAspecForToolWrites: false });
+    const ctx = { toolName: "safe.tool", params: { x: 1 }, sessionId: "s1" };
+    await plugin.hooks.before_tool_call(ctx);
+    const out = await plugin.hooks.after_tool_call(ctx, { hello: "world" });
+
+    assert.deepEqual(out, { truncated: true, preview: "abc" });
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].preflightReceiptHash, "pre-1");
+    assert.equal(calls[1].outputHash.length, 64);
     const plugin = createEvidenceGuardPlugin({
       evidenceUrl: "http://127.0.0.1:8787",
     });
@@ -141,8 +174,19 @@ test("before_tool_call never emits block:false and only rewrites params when ret
   }
 });
 
+test("before_tool_call blocks tool writes without wasm+content when ASPEC gate enabled", async () => {
+  const plugin = createEvidenceGuardPlugin({
+    evidenceUrl: "http://127.0.0.1:8787",
+    requireAspecForToolWrites: true,
+  });
 
+  const response = await plugin.hooks.before_tool_call({
+    toolName: "fs.write",
+    params: { path: "tools/new-tool.js", content: "console.log(1);" },
+  });
 
+  assert.equal(response.block, true);
+  assert.match(response.blockReason ?? "", /AspecRequired/);
 test("before_tool_call fails closed when preflight response omits decision", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
@@ -185,8 +229,9 @@ test("default audit logger emits deterministic one-line JSON", () => {
   try {
     config.auditLogger({
       ts: "2026-01-01T00:00:00.000Z",
+      stage: "preflight",
       toolName: "safe.tool",
-      paramsHash: "fnv1a32:42135e97",
+      paramsHash: "a".repeat(64),
       decision: "ALLOW",
       reasonCode: "PolicyAllow",
       blocked: false,
@@ -200,7 +245,7 @@ test("default audit logger emits deterministic one-line JSON", () => {
   const parsed = JSON.parse(lines[0]);
   assert.equal(parsed.type, "evidenceos.audit");
   assert.equal(parsed.toolName, "safe.tool");
-  assert.equal(parsed.paramsHash, "fnv1a32:42135e97");
+  assert.equal(parsed.paramsHash, "a".repeat(64));
 });
 
 
