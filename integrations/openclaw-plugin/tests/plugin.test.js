@@ -20,6 +20,8 @@ test("parseEvidenceGuardPluginConfig applies defaults and overrides", () => {
   assert.equal(config.circuitBreakerResetMs, 5000);
   assert.equal(config.failClosedRisk, "all");
   assert.deepEqual(config.highRiskTools, ["custom.tool"]);
+  assert.equal(config.maxParamBytes, 8192);
+  assert.equal(config.redactLargeStringsOver, 2048);
   assert.equal(typeof config.auditLogger, "function");
 });
 
@@ -71,6 +73,7 @@ test("before_tool_call fails closed on timeout for high-risk tools", async () =>
 
     assert.equal(response.block, true);
     assert.match(response.blockReason ?? "", /EvidenceUnavailable/);
+    assert.equal(response.receipt?.decision, "DENY");
     assert.ok(!("block" in (response.params ?? {})));
   } finally {
     globalThis.fetch = originalFetch;
@@ -127,10 +130,12 @@ test("before_tool_call never emits block:false and only rewrites params when ret
     const first = await plugin.hooks.before_tool_call({ toolName: "safe.tool", params: { x: 1 } });
     assert.ok(!("block" in first));
     assert.ok(!("params" in first));
+    assert.equal(first.receipt?.decision, "ALLOW");
 
     const second = await plugin.hooks.before_tool_call({ toolName: "safe.tool", params: { x: 1 } });
     assert.ok(!("block" in second));
     assert.deepEqual(second.params, { safe: true });
+    assert.equal(second.receipt?.decision, "ALLOW");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -160,6 +165,7 @@ test("before_tool_call fails closed when preflight response omits decision", asy
 
     assert.equal(response.block, true);
     assert.match(response.blockReason ?? "", /missing decision/);
+    assert.equal(response.receipt?.decision, "DENY");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -195,4 +201,31 @@ test("default audit logger emits deterministic one-line JSON", () => {
   assert.equal(parsed.type, "evidenceos.audit");
   assert.equal(parsed.toolName, "safe.tool");
   assert.equal(parsed.paramsHash, "fnv1a32:42135e97");
+});
+
+
+test("tool mutation gate denies non-wasm writes in tool directories", async () => {
+  const originalFetch = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    return new Response();
+  };
+
+  try {
+    const plugin = createEvidenceGuardPlugin({
+      evidenceUrl: "http://127.0.0.1:8787",
+    });
+
+    const response = await plugin.hooks.before_tool_call({
+      toolName: "fs.write",
+      params: { path: "/tools/not-allowed.txt", content: "abc" },
+    });
+
+    assert.equal(called, false);
+    assert.equal(response.block, true);
+    assert.equal(response.receipt?.reasonCode, "TOOL_ADMISSION_DENIED");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
