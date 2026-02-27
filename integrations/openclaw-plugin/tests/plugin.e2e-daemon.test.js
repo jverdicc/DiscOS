@@ -67,13 +67,39 @@ test("e2e preflight+postflight contract against daemon via plugin path", { skip:
   const candidate = { toolName: "search.web", params: { query: "internal secrets" }, sessionId: "e2e-session" };
 
   try {
-    await plugin.hooks.before_tool_call(candidate);
     await plugin.hooks.after_tool_call(candidate, { text: "small output" });
+  const candidates = [
+    { toolName: "search.web", params: { query: "internal secrets" } },
+    { toolName: "fs.delete_tree", params: { path: "/tmp/demo" } },
+    { toolName: "exec", params: { cmd: "cat /etc/shadow" } },
+  ];
+
+  let observedRewrite = false;
+  let requestsMade = 0;
+
+  try {
+    for (const candidate of candidates.slice(0, 2)) {
+      await plugin.hooks.before_tool_call(candidate);
+      requestsMade += 1;
+    }
+
+    const execCandidate = candidates[2];
+    for (let i = 0; i < 64 && !observedRewrite; i += 1) {
+      const out = await plugin.hooks.before_tool_call(execCandidate);
+      requestsMade += 1;
+      if (out.params && JSON.stringify(out.params) !== JSON.stringify(execCandidate.params)) {
+        observedRewrite = true;
+      }
+    }
   } finally {
     await proxy.close();
   }
 
   assert.ok(proxy.seenRequestIds.length >= 2, "expected X-Request-Id on each request");
-  assert.ok(proxy.seenPaths.some((path) => path.includes("/v1/preflight_tool_call")));
   assert.ok(proxy.seenPaths.some((path) => path.includes("/v1/postflight_tool_call")));
+  assert.ok(proxy.seenRequestIds.length >= requestsMade, "expected X-Request-Id on each request");
+  for (const requestId of proxy.seenRequestIds) {
+    assert.ok(requestId.length > 0, "X-Request-Id must be non-empty");
+  }
+  assert.ok(observedRewrite, "expected at least one DOWNGRADE rewrite from daemon preflight");
 });

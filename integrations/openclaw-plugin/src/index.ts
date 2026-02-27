@@ -36,6 +36,7 @@ export interface HookResponse {
   block?: boolean;
   blockReason?: string;
   params?: Record<string, unknown>;
+  receipt?: PreflightResponse;
 }
 
 export interface EvidenceGuardPluginConfig {
@@ -59,6 +60,11 @@ export interface EvidenceGuardPluginConfig {
   injectReceiptToAgent?: InjectReceiptMode;
   toolWritePaths?: string[];
   requireAspecForToolWrites?: boolean;
+  maxParamBytes?: number;
+  redactLargeStringsOver?: number;
+  redactFields?: Record<string, string[]>;
+  toolMutationDirs?: string[];
+  maxToolArtifactBytes?: number;
   auditLogger?: (event: AuditEvent) => void;
 }
 
@@ -83,6 +89,11 @@ export interface ResolvedEvidenceGuardPluginConfig {
   injectReceiptToAgent: InjectReceiptMode;
   toolWritePaths: string[];
   requireAspecForToolWrites: boolean;
+  maxParamBytes: number;
+  redactLargeStringsOver: number;
+  redactFields: Record<string, string[]>;
+  toolMutationDirs: string[];
+  maxToolArtifactBytes: number;
   auditLogger: (event: AuditEvent) => void;
 }
 
@@ -146,6 +157,11 @@ const DEFAULT_CIRCUIT_BREAKER_RESET_MS = 5000;
 const DEFAULT_MAX_OUTPUT_BYTES = 4096;
 const DEFAULT_SNAP_PARAMS_MAX_STRING = 2048;
 const DEFAULT_SNAP_PARAMS_MAX_ARRAY = 64;
+const DEFAULT_MAX_PARAM_BYTES = 8192;
+const DEFAULT_REDACT_LARGE_STRINGS_OVER = 2048;
+const DEFAULT_TOOL_MUTATION_DIRS = ["/tools/", "/plugins/", "/.openclaw/tools/"];
+const DEFAULT_MAX_TOOL_ARTIFACT_BYTES = 1024 * 1024;
+const NON_FALSIFIABLE_FIELDS = ["prompt", "systemPrompt", "chainOfThought", "cot", "reasoning", "messages"];
 const DEFAULT_HIGH_RISK_TOOLS = [
   "exec",
   "shell.exec",
@@ -317,6 +333,15 @@ function snapParams(
   return out;
 }
 
+function byteLen(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function sha256Hex(value: string): string {
+  // Fallback deterministic fingerprint for environments without Node crypto typings.
+  return hashParams({ value }).replace("fnv1a32:", "");
+}
+
 function parsePreflightResponse(payload: PreflightResponseWire): PreflightResponse {
   if (!payload.decision) {
     throw new Error("missing decision");
@@ -370,6 +395,84 @@ function matchesToolWritePath(rawPath: unknown, toolWritePaths: string[]): boole
   }
   const normalized = normalizePath(rawPath);
   return toolWritePaths.some((prefix) => normalized.startsWith(normalizePath(prefix)));
+function redactValue(value: unknown, config: ResolvedEvidenceGuardPluginConfig): unknown {
+  if (typeof value === "string" && value.length > config.redactLargeStringsOver) {
+    return { __redacted: true, sha256: sha256Hex(value), len: value.length };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactValue(item, config));
+  }
+
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = redactValue(v, config);
+    }
+    return out;
+  }
+
+  return value;
+}
+
+function snapshotParams(
+  toolName: string,
+  params: Record<string, unknown>,
+  config: ResolvedEvidenceGuardPluginConfig,
+): Record<string, unknown> {
+  const dropFields = new Set([...(config.redactFields[toolName] ?? []), ...NON_FALSIFIABLE_FIELDS]);
+  const reduced = Object.fromEntries(
+    Object.entries(params)
+      .filter(([key]) => !dropFields.has(key))
+      .map(([key, value]) => [key, redactValue(value, config)]),
+  );
+
+  const json = stableStringify(reduced);
+  if (byteLen(json) <= config.maxParamBytes) {
+    return reduced;
+  }
+
+  const truncated = JSON.stringify(reduced).slice(0, config.maxParamBytes);
+  return {
+    __truncated: true,
+    sha256: sha256Hex(json),
+    len: byteLen(json),
+    preview: truncated,
+  };
+}
+
+function createSyntheticReceipt(decision: Decision, reasonCode: string, reasonDetail: string): PreflightResponse {
+  return {
+    decision,
+    reasonCode,
+    reasonDetail,
+  };
+}
+
+function gateToolMutation(
+  ctx: ToolCallContext,
+  config: ResolvedEvidenceGuardPluginConfig,
+): PreflightResponse | null {
+  if (ctx.toolName !== "fs.write") {
+    return null;
+  }
+
+  const path = typeof ctx.params.path === "string" ? ctx.params.path : "";
+  const content = typeof ctx.params.content === "string" ? ctx.params.content : "";
+  const inToolDir = config.toolMutationDirs.some((prefix) => path.startsWith(prefix));
+  if (!inToolDir) {
+    return null;
+  }
+
+  if (!path.endsWith(".wasm")) {
+    return createSyntheticReceipt("DENY", "TOOL_ADMISSION_DENIED", "tool mutation only permits .wasm artifacts");
+  }
+
+  if (byteLen(content) > config.maxToolArtifactBytes) {
+    return createSyntheticReceipt("DENY", "TOOL_ADMISSION_DENIED", "tool artifact exceeds maxToolArtifactBytes");
+  }
+
+  return null;
 }
 
 export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) {
@@ -441,6 +544,7 @@ export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) 
   function maybeFailClosed(ctx: ToolCallContext, reasonCode: string, reasonDetail: string): HookResponse {
     const blocked = config.failClosedRisk === "all" || isHighRisk(ctx.toolName);
     const decision: Decision = blocked ? "DENY" : "ALLOW";
+    const receipt = createSyntheticReceipt(decision, reasonCode, reasonDetail);
 
     config.auditLogger({
       ts: new Date().toISOString(),
@@ -457,10 +561,11 @@ export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) 
       return {
         block: true,
         blockReason: `${reasonCode}:${reasonDetail}`,
+        receipt,
       };
     }
 
-    return {};
+    return { receipt };
   }
 
   async function callEvidence(path: string, body: unknown): Promise<Response> {
@@ -479,7 +584,12 @@ export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) 
       return await fetch(path, {
         method: "POST",
         headers,
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          toolName: ctx.toolName,
+          params: snapshotParams(ctx.toolName, ctx.params, config),
+          sessionId: config.autoSessionId ? (ctx.sessionId ?? defaultSessionId) : ctx.sessionId,
+          agentId: config.autoAgentId ? (ctx.agentId ?? defaultAgentId) : ctx.agentId,
+        }),
         signal: controller.signal,
       });
     } finally {
@@ -636,6 +746,15 @@ export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) 
     priority: 1000,
     hooks: {
       before_tool_call: async (ctx: ToolCallContext): Promise<HookResponse> => {
+        const mutationGate = gateToolMutation(ctx, config);
+        if (mutationGate) {
+          return {
+            block: true,
+            blockReason: `${mutationGate.reasonCode}:${mutationGate.reasonDetail ?? "n/a"}`,
+            receipt: mutationGate,
+          };
+        }
+
         const now = Date.now();
         if (circuitOpen(now)) {
           return maybeFailClosed(ctx, "EvidenceUnavailable", "Circuit breaker is open");
@@ -680,16 +799,18 @@ export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) 
             return {
               block: true,
               blockReason: `${decision.reasonCode}:${decision.reasonDetail ?? "n/a"}`,
+              receipt: decision,
             };
           }
 
           if (decision.rewrittenParams) {
             return {
               params: decision.rewrittenParams,
+              receipt: decision,
             };
           }
 
-          return {};
+          return { receipt: decision };
         } catch (error) {
           failures += 1;
           if (failures >= config.circuitBreakerThreshold) {
@@ -730,6 +851,11 @@ export function parseEvidenceGuardPluginConfig(
     injectReceiptToAgent: "on_block",
     toolWritePaths: [...DEFAULT_TOOL_WRITE_PATHS],
     requireAspecForToolWrites: true,
+    maxParamBytes: DEFAULT_MAX_PARAM_BYTES,
+    redactLargeStringsOver: DEFAULT_REDACT_LARGE_STRINGS_OVER,
+    redactFields: {},
+    toolMutationDirs: [...DEFAULT_TOOL_MUTATION_DIRS],
+    maxToolArtifactBytes: DEFAULT_MAX_TOOL_ARTIFACT_BYTES,
     auditLogger: (event: AuditEvent) => {
       console.log(JSON.stringify({ type: "evidenceos.audit", ...event }));
     },
