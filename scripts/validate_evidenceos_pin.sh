@@ -28,6 +28,28 @@ if [[ -z "${upstream_repo}" || -z "${upstream_rev}" ]]; then
   exit 1
 fi
 
+if [[ "${upstream_rev}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+  rev_lc="$(printf '%s' "${upstream_rev}" | tr '[:upper:]' '[:lower:]')"
+
+  set +e
+  ls_remote_output="$(git ls-remote "${upstream_repo}" 2>&1)"
+  ls_remote_status=$?
+  set -e
+
+  if [[ ${ls_remote_status} -ne 0 ]]; then
+    echo "[FAIL] Unable to query ${upstream_repo}: ${ls_remote_output}" >&2
+    exit 1
+  fi
+
+  if ! printf '%s\n' "${ls_remote_output}" | awk -v rev="${rev_lc}" '{ if (tolower($1) == rev) { found=1 } } END { exit (found ? 0 : 1) }'; then
+    echo "[FAIL] Pin commit ${upstream_rev} not found in ${upstream_repo}." >&2
+    exit 1
+  fi
+
+  echo "[OK] Found pin commit ${upstream_rev} in ${upstream_repo}."
+  exit 0
+fi
+
 set +e
 ls_remote_output="$(git ls-remote --tags "${upstream_repo}" "refs/tags/${upstream_rev}" 2>&1)"
 ls_remote_status=$?

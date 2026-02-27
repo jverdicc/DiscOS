@@ -56,10 +56,17 @@ else
   upstream_git_dir="${temp_dir}/EvidenceOS"
   git init -q "${upstream_git_dir}"
   git -C "${upstream_git_dir}" remote add origin "${upstream_repo}"
-  git -C "${upstream_git_dir}" fetch --depth 1 origin "refs/tags/${upstream_rev}:refs/tags/${upstream_rev}" >/dev/null 2>&1 || {
-    echo "[FAIL] Unable to fetch tag ${upstream_rev} from ${upstream_repo}." >&2
-    exit 1
-  }
+  if [[ "${upstream_rev}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+    git -C "${upstream_git_dir}" fetch --depth 1 origin "${upstream_rev}" >/dev/null 2>&1 || {
+      echo "[FAIL] Unable to fetch commit ${upstream_rev} from ${upstream_repo}." >&2
+      exit 1
+    }
+  else
+    git -C "${upstream_git_dir}" fetch --depth 1 origin "refs/tags/${upstream_rev}:refs/tags/${upstream_rev}" >/dev/null 2>&1 || {
+      echo "[FAIL] Unable to fetch tag ${upstream_rev} from ${upstream_repo}." >&2
+      exit 1
+    }
+  fi
 fi
 
 if ! git -C "${upstream_git_dir}" cat-file -e "${upstream_rev}^{commit}" 2>/dev/null; then
