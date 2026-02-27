@@ -66,11 +66,19 @@ test("e2e preflight contract against daemon via plugin path", { skip: !EVIDENCEO
   ];
 
   let observedRewrite = false;
+  let requestsMade = 0;
 
   try {
-    for (const candidate of candidates) {
-      const out = await plugin.hooks.before_tool_call(candidate);
-      if (out.params && JSON.stringify(out.params) !== JSON.stringify(candidate.params)) {
+    for (const candidate of candidates.slice(0, 2)) {
+      await plugin.hooks.before_tool_call(candidate);
+      requestsMade += 1;
+    }
+
+    const execCandidate = candidates[2];
+    for (let i = 0; i < 64 && !observedRewrite; i += 1) {
+      const out = await plugin.hooks.before_tool_call(execCandidate);
+      requestsMade += 1;
+      if (out.params && JSON.stringify(out.params) !== JSON.stringify(execCandidate.params)) {
         observedRewrite = true;
       }
     }
@@ -78,7 +86,7 @@ test("e2e preflight contract against daemon via plugin path", { skip: !EVIDENCEO
     await proxy.close();
   }
 
-  assert.ok(proxy.seenRequestIds.length >= candidates.length, "expected X-Request-Id on each request");
+  assert.ok(proxy.seenRequestIds.length >= requestsMade, "expected X-Request-Id on each request");
   for (const requestId of proxy.seenRequestIds) {
     assert.ok(requestId.length > 0, "X-Request-Id must be non-empty");
   }

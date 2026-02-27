@@ -146,7 +146,7 @@ jobs:
       - name: Start daemon and wait for preflight endpoint
         run: |
           mkdir -p artifacts/preflight-e2e
-          ../EvidenceOS/target/release/evidenceos-daemon --listen 127.0.0.1:8787 --data-dir artifacts/preflight-e2e/data > artifacts/preflight-e2e/daemon.log 2>&1 &
+          ../EvidenceOS/target/release/evidenceos-daemon --preflight-http-listen 127.0.0.1:8787 --data-dir artifacts/preflight-e2e/data > artifacts/preflight-e2e/daemon.log 2>&1 &
           echo $! > artifacts/preflight-e2e/daemon.pid
           for _ in $(seq 1 60); do
             code=$(curl -sS -o artifacts/preflight-e2e/preflight_probe.json -w "%{http_code}" -X POST "$EVIDENCEOS_PREFLIGHT_URL/v1/preflight_tool_call" -H "content-type: application/json" --data '{"toolName":"health.probe","params":{}}' || true)
@@ -162,6 +162,7 @@ jobs:
         working-directory: integrations/openclaw-plugin
         run: |
           npm ci
+          npm run build
           node --test tests/plugin.e2e-daemon.test.js
 
       - name: Run langchain-wrapper daemon preflight e2e test

@@ -72,17 +72,29 @@ def test_e2e_preflight_contract_against_daemon():
         ]
 
         observed_rewrite = False
-        for tool_name, params in candidates:
+        requests_made = 0
+
+        for tool_name, params in candidates[:2]:
+            result = guard.preflight_tool_call(tool_name=tool_name, tool_input=params)
+            requests_made += 1
+            if result.receipt.decision == "DOWNGRADE" and result.params != params:
+                observed_rewrite = True
+
+        exec_name, exec_params = candidates[2]
+        for _ in range(64):
+            if observed_rewrite:
+                break
             try:
-                result = guard.preflight_tool_call(tool_name=tool_name, tool_input=params)
-                if result.receipt.decision == "DOWNGRADE" and result.params != params:
+                result = guard.preflight_tool_call(tool_name=exec_name, tool_input=exec_params)
+                requests_made += 1
+                if result.receipt.decision == "DOWNGRADE" and result.params != exec_params:
                     observed_rewrite = True
             except EvidenceOSDecisionError as exc:
-                if exc.receipt.decision == "DOWNGRADE" and exc.receipt.reason_code:
-                    # DOWNGRADE should not throw; if it does, treat as contract drift.
-                    raise AssertionError("DOWNGRADE unexpectedly blocked") from exc
+                raise AssertionError(
+                    "exec was denied before observing DOWNGRADE rewrite; threshold drift or downgrade regression"
+                ) from exc
 
-        assert len(_ForwardProxy.request_ids) >= len(candidates)
+        assert len(_ForwardProxy.request_ids) >= requests_made
         assert all(request_id for request_id in _ForwardProxy.request_ids)
         assert observed_rewrite, "expected at least one DOWNGRADE rewrite from daemon preflight"
     finally:
