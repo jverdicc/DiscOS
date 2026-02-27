@@ -337,11 +337,6 @@ function byteLen(value: string): number {
   return new TextEncoder().encode(value).length;
 }
 
-function sha256Hex(value: string): string {
-  // Fallback deterministic fingerprint for environments without Node crypto typings.
-  return hashParams({ value }).replace("fnv1a32:", "");
-}
-
 function parsePreflightResponse(payload: PreflightResponseWire): PreflightResponse {
   if (!payload.decision) {
     throw new Error("missing decision");
@@ -395,6 +390,8 @@ function matchesToolWritePath(rawPath: unknown, toolWritePaths: string[]): boole
   }
   const normalized = normalizePath(rawPath);
   return toolWritePaths.some((prefix) => normalized.startsWith(normalizePath(prefix)));
+}
+
 function redactValue(value: unknown, config: ResolvedEvidenceGuardPluginConfig): unknown {
   if (typeof value === "string" && value.length > config.redactLargeStringsOver) {
     return { __redacted: true, sha256: sha256Hex(value), len: value.length };
@@ -584,12 +581,7 @@ export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) 
       return await fetch(path, {
         method: "POST",
         headers,
-        body: JSON.stringify({
-          toolName: ctx.toolName,
-          params: snapshotParams(ctx.toolName, ctx.params, config),
-          sessionId: config.autoSessionId ? (ctx.sessionId ?? defaultSessionId) : ctx.sessionId,
-          agentId: config.autoAgentId ? (ctx.agentId ?? defaultAgentId) : ctx.agentId,
-        }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       });
     } finally {
