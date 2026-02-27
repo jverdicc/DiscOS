@@ -149,13 +149,13 @@ jobs:
           ../EvidenceOS/target/release/evidenceos-daemon --preflight-http-listen 127.0.0.1:8787 --data-dir artifacts/preflight-e2e/data > artifacts/preflight-e2e/daemon.log 2>&1 &
           echo $! > artifacts/preflight-e2e/daemon.pid
           for _ in $(seq 1 60); do
-            code=$(curl -sS -o artifacts/preflight-e2e/preflight_probe.json -w "%{http_code}" -X POST "$EVIDENCEOS_PREFLIGHT_URL/v1/preflight_tool_call" -H "content-type: application/json" --data '{"toolName":"health.probe","params":{}}' || true)
-            if [ "$code" != "000" ]; then
+            code=$(curl -s -o artifacts/preflight-e2e/preflight.json -w "%{http_code}" http://127.0.0.1:8080/preflight || true)
+            if [ "$code" = "200" ]; then
               exit 0
             fi
             sleep 1
           done
-          echo "preflight endpoint did not start" >&2
+          echo "preflight endpoint did not return HTTP 200 before timeout; see artifacts/preflight-e2e/daemon.log" >&2
           exit 1
 
       - name: Run openclaw-plugin daemon preflight e2e test

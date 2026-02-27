@@ -1,7 +1,7 @@
 # Pinned upstream source for vendored EvidenceOS crates.
 # IMPORTANT: EVIDENCEOS_REV MUST be an immutable tag OR commit SHA in the upstream repo (not a moving branch).
 EVIDENCEOS_REPO="https://github.com/jverdicc/EvidenceOS.git"
-EVIDENCEOS_REV="4c1d7f2b0adf337df75fc85d4b7d84df4e99d0af"
+EVIDENCEOS_REV="92daeb58a28323ed6ee75a89535cf86b4902f3fe"
 
 # Vendored crates that must remain byte-identical to the pinned tag/commit.
 EVIDENCEOS_VENDORED_CRATES=(
