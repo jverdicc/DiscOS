@@ -7,6 +7,7 @@ import { createEvidenceGuardPlugin } from "../dist/index.js";
 test("integration: plugin sends required headers and applies policy response contract", async () => {
   let observedRequestId;
   let observedAuth;
+  let observedBody;
 
   const server = http.createServer((req, res) => {
     if (req.method !== "POST" || req.url !== "/v1/preflight_tool_call") {
@@ -22,6 +23,7 @@ test("integration: plugin sends required headers and applies policy response con
     req.on("data", (chunk) => chunks.push(chunk));
     req.on("end", () => {
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      observedBody = body;
       const response = body.toolName === "safe.tool"
         ? {
             decision: "DOWNGRADE",
@@ -57,6 +59,9 @@ test("integration: plugin sends required headers and applies policy response con
     assert.ok(observedRequestId, "expected X-Request-Id header to be set");
     assert.match(observedRequestId ?? "", /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     assert.equal(observedAuth, "Bearer test-token");
+    assert.equal(typeof observedBody.sessionId, "string");
+    assert.ok(observedBody.sessionId.length > 0);
+    assert.equal(observedBody.agentId, "openclaw");
 
     const denied = await plugin.hooks.before_tool_call({ toolName: "danger.tool", params: { a: 1 } });
     assert.equal(denied.block, true);

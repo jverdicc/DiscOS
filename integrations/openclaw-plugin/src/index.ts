@@ -32,6 +32,10 @@ export interface EvidenceGuardPluginConfig {
   circuitBreakerResetMs?: number;
   failClosedRisk?: "high-only" | "all";
   highRiskTools?: string[];
+  sessionId?: string;
+  agentId?: string;
+  autoSessionId?: boolean;
+  autoAgentId?: boolean;
   auditLogger?: (event: AuditEvent) => void;
 }
 
@@ -43,6 +47,10 @@ export interface ResolvedEvidenceGuardPluginConfig {
   circuitBreakerResetMs: number;
   failClosedRisk: "high-only" | "all";
   highRiskTools: string[];
+  sessionId?: string;
+  agentId?: string;
+  autoSessionId: boolean;
+  autoAgentId: boolean;
   auditLogger: (event: AuditEvent) => void;
 }
 
@@ -118,8 +126,12 @@ function hashParams(params: Record<string, unknown>): string {
 }
 
 function parsePreflightResponse(payload: PreflightResponseWire): PreflightResponse {
+  if (!payload.decision) {
+    throw new Error("missing decision");
+  }
+
   return {
-    decision: payload.decision ?? "ALLOW",
+    decision: payload.decision,
     reasonCode: payload.reasonCode ?? payload.reason_code ?? "Unknown",
     reasonDetail: payload.reasonDetail ?? payload.reason_detail,
     rewrittenParams: payload.rewrittenParams ?? payload.rewritten_params,
@@ -129,6 +141,15 @@ function parsePreflightResponse(payload: PreflightResponseWire): PreflightRespon
 
 export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) {
   const config = parseEvidenceGuardPluginConfig(rawConfig);
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  const defaultSessionId =
+    config.sessionId
+    ?? env?.EVIDENCEOS_SESSION_ID
+    ?? `openclaw-${crypto.randomUUID()}`;
+  const defaultAgentId =
+    config.agentId
+    ?? env?.EVIDENCEOS_AGENT_ID
+    ?? "openclaw";
 
   let failures = 0;
   let circuitOpenedAt: number | null = null;
@@ -193,7 +214,12 @@ export function createEvidenceGuardPlugin(rawConfig: EvidenceGuardPluginConfig) 
       const response = await fetch(`${config.evidenceUrl}/v1/preflight_tool_call`, {
         method: "POST",
         headers,
-        body: JSON.stringify(ctx),
+        body: JSON.stringify({
+          toolName: ctx.toolName,
+          params: ctx.params,
+          sessionId: config.autoSessionId ? (ctx.sessionId ?? defaultSessionId) : ctx.sessionId,
+          agentId: config.autoAgentId ? (ctx.agentId ?? defaultAgentId) : ctx.agentId,
+        }),
         signal: controller.signal,
       });
 
@@ -277,6 +303,8 @@ export function parseEvidenceGuardPluginConfig(
     circuitBreakerResetMs: DEFAULT_CIRCUIT_BREAKER_RESET_MS,
     failClosedRisk: "high-only" as const,
     highRiskTools: [...DEFAULT_HIGH_RISK_TOOLS],
+    autoSessionId: true,
+    autoAgentId: true,
     auditLogger: (event: AuditEvent) => {
       // Deterministic one-line JSON for machine ingestion.
       console.log(JSON.stringify({ type: "evidenceos.audit", ...event }));

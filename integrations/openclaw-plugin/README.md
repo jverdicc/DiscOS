@@ -42,6 +42,9 @@ export default createEvidenceGuardPlugin({
   bearerToken: process.env.EVIDENCEOS_TOKEN, // optional
   timeoutMs: 120,
   failClosedRisk: "high-only",
+  // Optional stable identifiers (recommended for long-running budgets):
+  sessionId: process.env.EVIDENCEOS_SESSION_ID,
+  agentId: process.env.EVIDENCEOS_AGENT_ID ?? "openclaw",
 });
 ```
 
@@ -52,6 +55,15 @@ createEvidenceGuardPlugin({
   evidenceUrl: "http://127.0.0.1:8787",
 });
 ```
+
+
+Session/agent identity defaults:
+
+- `sessionId` is always sent; if OpenClaw does not provide one, the plugin uses `sessionId` config, then `EVIDENCEOS_SESSION_ID`, then an auto-generated `openclaw-<uuid>`.
+- `agentId` is always sent; defaults to `agentId` config, then `EVIDENCEOS_AGENT_ID`, then `"openclaw"`.
+- Pass a stable `sessionId` when you want EvidenceOS operation budgets to span process restarts.
+- EvidenceOS may require `sessionId` for high-risk tools and deny requests when it is missing.
+
 
 ## Wire contract (`POST /v1/preflight_tool_call`)
 
