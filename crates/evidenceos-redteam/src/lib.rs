@@ -128,9 +128,21 @@ async fn create_claim(
             oracle_num_symbols: 16,
             access_credit: 1,
             oracle_id: "default".to_string(),
+            nullspec_id: String::new(),
+            dp_epsilon_budget: None,
+            dp_delta_budget: None,
         })
         .await
-        .map_err(|e| tonic::Status::new(Code::Unknown, e.to_string()))?;
+        .map_err(|e| {
+            let text = e.to_string();
+            if text.contains("UNSIGNED_NULLSPEC") {
+                tonic::Status::new(Code::FailedPrecondition, "UNSIGNED_NULLSPEC")
+            } else if text.contains("INVALID_") || text.contains("UNKNOWN_CLAIM") {
+                tonic::Status::new(Code::InvalidArgument, "INVALID_REQUEST")
+            } else {
+                tonic::Status::new(Code::Unknown, "UNKNOWN")
+            }
+        })?;
     Ok(response.claim_id)
 }
 
@@ -233,6 +245,9 @@ pub async fn run_redteam(
             oracle_num_symbols: 16,
             access_credit: 1,
             oracle_id: "default".to_string(),
+            nullspec_id: String::new(),
+            dp_epsilon_budget: None,
+            dp_delta_budget: None,
         })
         .await?;
 
@@ -255,6 +270,9 @@ pub async fn run_redteam(
             oracle_num_symbols: 16,
             access_credit: 1,
             oracle_id: "default".to_string(),
+            nullspec_id: String::new(),
+            dp_epsilon_budget: None,
+            dp_delta_budget: None,
         })
         .await?;
 

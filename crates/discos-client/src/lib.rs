@@ -151,7 +151,7 @@ impl Interceptor for AuthInterceptor {
 
                 let headers = build_hmac_headers(
                     &request_id,
-                    request.uri().path(),
+                    "/",
                     Some(&timestamp),
                     secret,
                     Some(key_id),
@@ -276,17 +276,6 @@ impl DiscosClient {
             .map_err(|e| ClientError::Kernel(e.to_string()))
     }
 
-    pub async fn commit_wasm(
-        &mut self,
-        req: pb::CommitWasmRequest,
-    ) -> Result<pb::CommitWasmResponse, ClientError> {
-        self.inner
-            .commit_wasm(req)
-            .await
-            .map(|r| r.into_inner())
-            .map_err(|e| ClientError::Kernel(e.to_string()))
-    }
-
     pub async fn freeze(
         &mut self,
         req: pb::FreezeRequest,
@@ -367,7 +356,7 @@ impl DiscosClient {
     pub async fn watch_revocations(
         &mut self,
         req: pb::WatchRevocationsRequest,
-    ) -> Result<tonic::Streaming<pb::RevocationEvent>, ClientError> {
+    ) -> Result<tonic::Streaming<pb::WatchRevocationsResponse>, ClientError> {
         self.inner
             .watch_revocations(req)
             .await
@@ -385,7 +374,7 @@ impl DiscosClient {
 
     pub async fn get_public_key(&mut self) -> Result<pb::GetPublicKeyResponse, ClientError> {
         self.inner
-            .get_public_key(pb::GetPublicKeyRequest {})
+            .get_public_key(pb::GetPublicKeyRequest { key_id: Vec::new() })
             .await
             .map(|r| r.into_inner())
             .map_err(|e| ClientError::Kernel(e.to_string()))
@@ -562,15 +551,15 @@ pub fn verify_capsule_response(
 ) -> Result<(), ClientError> {
     canonical_output_matches_capsule(
         structured_output,
-        &response.capsule,
+        &response.capsule_bytes,
         expected_claim_id,
         expected_topic_id,
     )?;
 
-    let capsule_hash = verifier::etl_leaf_hash(&response.capsule);
+    let capsule_hash = verifier::etl_leaf_hash(&response.capsule_bytes);
 
     let inclusion = response
-        .inclusion
+        .inclusion_proof
         .as_ref()
         .ok_or_else(|| ClientError::VerificationFailed("missing inclusion proof".to_string()))?;
     let leaf_hash: [u8; 32] = inclusion.leaf_hash.as_slice().try_into().map_err(|_| {
@@ -582,7 +571,7 @@ pub fn verify_capsule_response(
         ));
     }
 
-    let root_hash: [u8; 32] = response.etl_root_hash.as_slice().try_into().map_err(|_| {
+    let root_hash: [u8; 32] = response.root_hash.as_slice().try_into().map_err(|_| {
         ClientError::VerificationFailed("etl_root_hash must be 32 bytes".to_string())
     })?;
     let proof = InclusionProof {
@@ -608,15 +597,22 @@ pub fn verify_capsule_response(
     }
 
     let sth = SignedTreeHead {
-        tree_size: response.etl_tree_size,
+        tree_size: response.tree_size,
         root_hash,
-        signature: response.sth_signature.as_slice().try_into().map_err(|_| {
+        signature: response
+            .signed_tree_head
+            .as_ref()
+            .ok_or_else(|| ClientError::VerificationFailed("missing signed tree head".to_string()))?
+            .signature
+            .as_slice()
+            .try_into()
+            .map_err(|_| {
             ClientError::VerificationFailed("sth_signature must be 64 bytes".to_string())
         })?,
     };
     verify_sth_signature(&sth, server_pubkey)?;
 
-    if let (Some(prev), Some(consistency)) = (previous_sth, response.consistency.as_ref()) {
+    if let (Some(prev), Some(consistency)) = (previous_sth, response.consistency_proof.as_ref()) {
         let consistency_proof = ConsistencyProof {
             old_tree_size: consistency.old_tree_size,
             new_tree_size: consistency.new_tree_size,

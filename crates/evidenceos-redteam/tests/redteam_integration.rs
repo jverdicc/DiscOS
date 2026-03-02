@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use discos_client::pb;
 use evidenceos_redteam::{run_redteam, Thresholds};
+use sha2::Digest;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::{transport::Server, Code, Request, Response, Status};
@@ -56,6 +57,7 @@ impl pb::evidence_os_server::EvidenceOs for MockDaemon {
         Ok(Response::new(pb::CreateClaimV2Response {
             claim_id,
             topic_id,
+            state: pb::ClaimState::Committed as i32,
         }))
     }
 
@@ -65,30 +67,34 @@ impl pb::evidence_os_server::EvidenceOs for MockDaemon {
     ) -> Result<Response<pb::ExecuteClaimV2Response>, Status> {
         let id = req.into_inner().claim_id;
         let state = self.0.lock().await;
-        let topic = state
+        let _topic = state
             .claim_topics
             .get(&id)
             .ok_or_else(|| Status::new(Code::InvalidArgument, "UNKNOWN_CLAIM"))?;
-        if topic.first().copied().unwrap_or_default() % 2 == 0 {
-            tokio::time::sleep(Duration::from_millis(2)).await;
-        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
         Ok(Response::new(pb::ExecuteClaimV2Response {
-            certified: true,
-            e_value: 1.0,
+            state: pb::ClaimState::Certified as i32,
+            decision: pb::Decision::Approve as i32,
+            reason_codes: Vec::new(),
             canonical_output: br#"{"decision":"allow"}"#.to_vec(),
+            e_value: 1.0,
+            certified: true,
+            capsule_hash: vec![0; 32],
+            etl_index: 0,
         }))
+    }
+
+    async fn create_claim(
+        &self,
+        _: Request<pb::CreateClaimRequest>,
+    ) -> Result<Response<pb::CreateClaimResponse>, Status> {
+        Err(Status::unimplemented("n/a"))
     }
 
     async fn commit_artifacts(
         &self,
         _: Request<pb::CommitArtifactsRequest>,
     ) -> Result<Response<pb::CommitArtifactsResponse>, Status> {
-        Err(Status::unimplemented("n/a"))
-    }
-    async fn commit_wasm(
-        &self,
-        _: Request<pb::CommitWasmRequest>,
-    ) -> Result<Response<pb::CommitWasmResponse>, Status> {
         Err(Status::unimplemented("n/a"))
     }
     async fn freeze(
@@ -134,13 +140,74 @@ impl pb::evidence_os_server::EvidenceOs for MockDaemon {
         Err(Status::unimplemented("n/a"))
     }
     type WatchRevocationsStream =
-        tokio_stream::wrappers::ReceiverStream<Result<pb::RevocationEvent, Status>>;
+        tokio_stream::wrappers::ReceiverStream<Result<pb::WatchRevocationsResponse, Status>>;
     async fn watch_revocations(
         &self,
         _: Request<pb::WatchRevocationsRequest>,
     ) -> Result<Response<Self::WatchRevocationsStream>, Status> {
         Err(Status::unimplemented("n/a"))
     }
+    async fn freeze_gates(
+        &self,
+        _: Request<pb::FreezeGatesRequest>,
+    ) -> Result<Response<pb::FreezeGatesResponse>, Status> {
+        Err(Status::unimplemented("n/a"))
+    }
+    async fn seal(
+        &self,
+        _: Request<pb::SealRequest>,
+    ) -> Result<Response<pb::SealResponse>, Status> {
+        Err(Status::unimplemented("n/a"))
+    }
+    async fn seal_claim(
+        &self,
+        _: Request<pb::SealClaimRequest>,
+    ) -> Result<Response<pb::SealClaimResponse>, Status> {
+        Err(Status::unimplemented("n/a"))
+    }
+    async fn execute_claim(
+        &self,
+        _: Request<pb::ExecuteClaimRequest>,
+    ) -> Result<Response<pb::ExecuteClaimResponse>, Status> {
+        Err(Status::unimplemented("n/a"))
+    }
+    async fn get_capsule(
+        &self,
+        _: Request<pb::GetCapsuleRequest>,
+    ) -> Result<Response<pb::GetCapsuleResponse>, Status> {
+        Err(Status::unimplemented("n/a"))
+    }
+    async fn get_revocation_feed(
+        &self,
+        _: Request<pb::GetRevocationFeedRequest>,
+    ) -> Result<Response<pb::GetRevocationFeedResponse>, Status> {
+        Err(Status::unimplemented("n/a"))
+    }
+    async fn grant_credit(
+        &self,
+        _: Request<pb::GrantCreditRequest>,
+    ) -> Result<Response<pb::GrantCreditResponse>, Status> {
+        Err(Status::unimplemented("n/a"))
+    }
+    async fn set_credit_limit(
+        &self,
+        _: Request<pb::SetCreditLimitRequest>,
+    ) -> Result<Response<pb::SetCreditLimitResponse>, Status> {
+        Err(Status::unimplemented("n/a"))
+    }
+    async fn set_holdout_pool_budgets(
+        &self,
+        _: Request<pb::SetHoldoutPoolBudgetsRequest>,
+    ) -> Result<Response<pb::SetHoldoutPoolBudgetsResponse>, Status> {
+        Err(Status::unimplemented("n/a"))
+    }
+    async fn get_holdout_pool_budgets(
+        &self,
+        _: Request<pb::GetHoldoutPoolBudgetsRequest>,
+    ) -> Result<Response<pb::GetHoldoutPoolBudgetsResponse>, Status> {
+        Err(Status::unimplemented("n/a"))
+    }
+
     async fn get_server_info(
         &self,
         _: Request<pb::GetServerInfoRequest>,
