@@ -145,18 +145,30 @@ jobs:
 
       - name: Start daemon and wait for preflight endpoint
         run: |
-          mkdir -p artifacts/preflight-e2e
+          mkdir -p artifacts/preflight-e2e/data
           ../EvidenceOS/target/release/evidenceos-daemon --preflight-http-listen 127.0.0.1:8787 --data-dir artifacts/preflight-e2e/data > artifacts/preflight-e2e/daemon.log 2>&1 &
           echo $! > artifacts/preflight-e2e/daemon.pid
           for _ in $(seq 1 60); do
-            code=$(curl -s -o artifacts/preflight-e2e/preflight.json -w "%{http_code}" ${EVIDENCEOS_PREFLIGHT_URL}/preflight || true)
-            if [ "$code" = "200" ]; then
+            preflight_code=$(curl -s -o artifacts/preflight-e2e/preflight.json -w "%{http_code}" ${EVIDENCEOS_PREFLIGHT_URL}/preflight || true)
+            health_code=$(curl -s -o artifacts/preflight-e2e/health.json -w "%{http_code}" ${EVIDENCEOS_PREFLIGHT_URL}/health || true)
+            root_code=$(curl -s -o artifacts/preflight-e2e/root.html -w "%{http_code}" ${EVIDENCEOS_PREFLIGHT_URL}/ || true)
+            if [ "$preflight_code" = "200" ] || [ "$health_code" = "200" ] || [ "$root_code" = "200" ]; then
               exit 0
             fi
             sleep 1
           done
-          echo "preflight endpoint did not return HTTP 200 before timeout; see artifacts/preflight-e2e/daemon.log" >&2
+          echo "daemon did not return HTTP 200 on /preflight, /health, or / before timeout; see artifacts/preflight-e2e/daemon.log" >&2
           exit 1
+
+      - name: Print daemon log on failure
+        if: failure()
+        run: |
+          echo "=== daemon.log ==="
+          cat artifacts/preflight-e2e/daemon.log || echo "no log found"
+          echo "=== daemon pid ==="
+          cat artifacts/preflight-e2e/daemon.pid || echo "no pid found"
+          echo "=== process check ==="
+          ps aux | grep evidenceos || true
 
       - name: Run openclaw-plugin daemon preflight e2e test
         working-directory: integrations/openclaw-plugin
