@@ -102,4 +102,7 @@ test("e2e preflight+postflight contract against daemon via plugin path", { skip:
     assert.ok(requestId.length > 0, "X-Request-Id must be non-empty");
   }
   assert.ok(observedRewrite, "expected at least one DOWNGRADE rewrite from daemon preflight");
+  } catch (err) {
+    throw err;
+  }
 });
