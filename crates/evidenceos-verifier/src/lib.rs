@@ -4,7 +4,7 @@
 )]
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use evidenceos_protocol::domains;
+use evidenceos_protocol::{DOMAIN_REVOCATIONS_SNAPSHOT_V1, DOMAIN_STH_SIGNATURE_V1};
 use sha2::{Digest, Sha256};
 
 const MAX_MERKLE_PATH_LEN: usize = 64;
@@ -170,7 +170,7 @@ pub fn sth_signature_digest(tree_size: u64, root_hash: [u8; 32]) -> [u8; 32] {
     let mut payload = Vec::with_capacity(40);
     payload.extend_from_slice(&tree_size.to_be_bytes());
     payload.extend_from_slice(&root_hash);
-    sha256_domain(domains::STH_SIGNATURE_V1, &payload)
+    sha256_domain(DOMAIN_STH_SIGNATURE_V1, &payload)
 }
 
 pub fn revocation_entry_digest(entry: &RevocationEntry) -> [u8; 32] {
@@ -180,7 +180,7 @@ pub fn revocation_entry_digest(entry: &RevocationEntry) -> [u8; 32] {
     payload.extend_from_slice(&(entry.reason_code.len() as u32).to_be_bytes());
     payload.extend_from_slice(entry.reason_code.as_bytes());
     payload.extend_from_slice(&entry.logical_epoch.to_be_bytes());
-    sha256_domain(domains::REVOCATION_FEED_V1, &payload)
+    sha256_domain(DOMAIN_REVOCATIONS_SNAPSHOT_V1, &payload)
 }
 
 pub fn revocations_snapshot_digest(entries: &[RevocationEntry], sth: &SignedTreeHead) -> [u8; 32] {
@@ -193,7 +193,7 @@ pub fn revocations_snapshot_digest(entries: &[RevocationEntry], sth: &SignedTree
     payload.extend_from_slice(&sth.tree_size.to_be_bytes());
     payload.extend_from_slice(&sth.root_hash);
     payload.extend_from_slice(&sth.signature);
-    sha256_domain(domains::REVOCATION_FEED_V1, &payload)
+    sha256_domain(DOMAIN_REVOCATIONS_SNAPSHOT_V1, &payload)
 }
 
 pub fn verify_sth_signature(
