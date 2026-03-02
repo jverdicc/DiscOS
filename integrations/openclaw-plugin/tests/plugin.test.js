@@ -156,19 +156,6 @@ test("after_tool_call enforces REDACT rewrite", async () => {
     assert.equal(calls.length, 2);
     assert.equal(calls[1].preflightReceiptHash, "pre-1");
     assert.equal(calls[1].outputHash.length, 64);
-    const plugin = createEvidenceGuardPlugin({
-      evidenceUrl: "http://127.0.0.1:8787",
-    });
-
-    const first = await plugin.hooks.before_tool_call({ toolName: "safe.tool", params: { x: 1 } });
-    assert.ok(!("block" in first));
-    assert.ok(!("params" in first));
-    assert.equal(first.receipt?.decision, "ALLOW");
-
-    const second = await plugin.hooks.before_tool_call({ toolName: "safe.tool", params: { x: 1 } });
-    assert.ok(!("block" in second));
-    assert.deepEqual(second.params, { safe: true });
-    assert.equal(second.receipt?.decision, "ALLOW");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -187,6 +174,8 @@ test("before_tool_call blocks tool writes without wasm+content when ASPEC gate e
 
   assert.equal(response.block, true);
   assert.match(response.blockReason ?? "", /AspecRequired/);
+});
+
 test("before_tool_call fails closed when preflight response omits decision", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
