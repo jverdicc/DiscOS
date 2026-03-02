@@ -663,6 +663,9 @@ async fn run_scenario_live(
                 oracle_num_symbols: 1024,
                 access_credit: 100_000,
                 oracle_id: "default".to_string(),
+                nullspec_id: String::new(),
+                dp_epsilon_budget: None,
+                dp_delta_budget: None,
             };
 
             let mut create_rpc = tonic::Request::new(create_req);
@@ -765,6 +768,7 @@ fn parse_daemon_semver(daemon_version: &str) -> Option<Version> {
 }
 
 fn compatibility_error_json(server: &pb::GetServerInfoResponse) -> serde_json::Value {
+    let feature_flags = format!("{:?}", server.feature_flags);
     serde_json::json!({
         "error": "incompatible_daemon",
         "expected_protocol_semver": expected_protocol_semver(),
@@ -777,7 +781,7 @@ fn compatibility_error_json(server: &pb::GetServerInfoResponse) -> serde_json::V
             "build_git_commit": server.build_git_commit,
             "build_time_utc": server.build_time_utc,
             "daemon_version": server.daemon_version,
-            "feature_flags": server.feature_flags
+            "feature_flags": feature_flags
         }
     })
 }
@@ -848,9 +852,10 @@ fn load_scenarios(dir: &Path) -> anyhow::Result<Vec<ScenarioSpec>> {
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::new(args.log))
+        .with_env_filter(EnvFilter::new(args.log.clone()))
         .init();
 
+    let dual_use_policy = dual_use_policy_from_args(&args);
     match args.cmd {
         Command::Health => {
             let mut client = connect_client(&args).await?;
@@ -941,6 +946,7 @@ async fn main() -> anyhow::Result<()> {
             let mut client = connect_client(&args).await?;
             assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
             let info = client.get_server_info().await?;
+            let feature_flags = format!("{:?}", info.feature_flags);
             println!(
                 "{}",
                 serde_json::json!({
@@ -949,7 +955,7 @@ async fn main() -> anyhow::Result<()> {
                     "build_git_commit": info.build_git_commit,
                     "build_time_utc": info.build_time_utc,
                     "daemon_version": info.daemon_version,
-                    "feature_flags": info.feature_flags,
+                    "feature_flags": feature_flags,
                     "expected_protocol_semver": expected_protocol_semver(),
                     "expected_proto_hash": expected_proto_hash(),
                     "allow_protocol_drift": args.allow_protocol_drift
@@ -1003,7 +1009,7 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
         },
-        Command::Claim { cmd } => match cmd {
+        Command::Claim { ref cmd } => match cmd {
             ClaimCommand::Create {
                 claim_name,
                 alpha_micros,
@@ -1018,8 +1024,7 @@ async fn main() -> anyhow::Result<()> {
             } => {
                 validate_oracle_id(&oracle_id)?;
                 let output_schema_id = canonicalize_output_schema_id(&output_schema_id);
-                let dual_use_policy = dual_use_policy_from_args(&args);
-                let mut lane = lane;
+                let mut lane = lane.clone();
                 match enforce_dual_use_policy(
                     &dual_use_policy,
                     &ClaimSafetyContext {
@@ -1073,7 +1078,7 @@ async fn main() -> anyhow::Result<()> {
                 let topic = compute_topic_id(
                     &ClaimMetadata {
                         lane: lane.clone(),
-                        alpha_micros,
+                        alpha_micros: *alpha_micros,
                         epoch_config_ref: epoch_config_ref.clone(),
                         output_schema_id: output_schema_id.clone(),
                     },
@@ -1118,21 +1123,24 @@ async fn main() -> anyhow::Result<()> {
                     .create_claim_v2(pb::CreateClaimV2Request {
                         claim_name: claim_name.clone(),
                         metadata: Some(pb::ClaimMetadataV2 {
-                            lane,
-                            alpha_micros,
-                            epoch_config_ref,
-                            output_schema_id,
+                            lane: lane.clone(),
+                            alpha_micros: *alpha_micros,
+                            epoch_config_ref: epoch_config_ref.clone(),
+                            output_schema_id: output_schema_id.clone(),
                         }),
                         signals: Some(pb::TopicSignalsV2 {
                             semantic_hash: vec![],
                             phys_hir_signature_hash: topic.signals.phys_hir_signature_hash.to_vec(),
                             dependency_merkle_root: vec![],
                         }),
-                        holdout_ref,
-                        epoch_size,
-                        oracle_num_symbols,
-                        access_credit,
+                        holdout_ref: holdout_ref.clone(),
+                        epoch_size: (*epoch_size).into(),
+                        oracle_num_symbols: *oracle_num_symbols,
+                        access_credit: *access_credit,
                         oracle_id: oracle_id.clone(),
+                        nullspec_id: String::new(),
+                        dp_epsilon_budget: None,
+                        dp_delta_budget: None,
                     })
                     .await
                     .map_err(|e| {
@@ -1154,7 +1162,7 @@ async fn main() -> anyhow::Result<()> {
             } => {
                 let wasm_bytes =
                     fs::read(&wasm).with_context(|| format!("read wasm {}", wasm.display()))?;
-                let artifact_manifests = manifests
+                let mut artifacts = manifests
                     .iter()
                     .map(|p| {
                         let bytes = fs::read(p)
@@ -1163,37 +1171,31 @@ async fn main() -> anyhow::Result<()> {
                             &serde_json::from_slice::<serde_json::Value>(&bytes)
                                 .context("manifest should be json")?,
                         )?;
-                        Ok(pb::ArtifactManifest {
-                            name: p
+                        Ok(pb::Artifact {
+                            artifact_hash: digest.to_vec(),
+                            kind: p
                                 .file_name()
                                 .unwrap_or_default()
                                 .to_string_lossy()
                                 .to_string(),
-                            canonical_bytes: bytes,
-                            digest: digest.to_vec(),
                         })
                     })
                     .collect::<anyhow::Result<Vec<_>>>()?;
+                artifacts.push(pb::Artifact {
+                    artifact_hash: wasm_hash_for_bytes(&wasm_bytes).to_vec(),
+                    kind: "wasm_module".to_string(),
+                });
                 let mut client = connect_client(&args).await?;
                 assert_server_compatibility(&mut client, args.allow_protocol_drift).await?;
                 let claim_id_bytes = hex_decode_bytes(&claim_id)?;
-                let artifacts = client
+                let commit_resp = client
                     .commit_artifacts(pb::CommitArtifactsRequest {
-                        claim_id: claim_id_bytes.clone(),
-                        manifests: artifact_manifests,
-                    })
-                    .await?;
-                let wasm = client
-                    .commit_wasm(pb::CommitWasmRequest {
                         claim_id: claim_id_bytes,
-                        wasm_hash: wasm_hash_for_bytes(&wasm_bytes).to_vec(),
+                        artifacts,
                         wasm_module: wasm_bytes,
                     })
                     .await?;
-                println!(
-                    "{}",
-                    serde_json::json!({"artifacts_accepted": artifacts.accepted, "wasm_accepted": wasm.accepted})
-                );
+                println!("{}", serde_json::json!({"state": commit_resp.state}));
             }
             ClaimCommand::Freeze { claim_id } => {
                 let mut client = connect_client(&args).await?;
@@ -1203,7 +1205,7 @@ async fn main() -> anyhow::Result<()> {
                         claim_id: hex_decode_bytes(&claim_id)?,
                     })
                     .await?;
-                println!("{}", serde_json::json!({"frozen": resp.frozen}));
+                println!("{}", serde_json::json!({"state": resp.state}));
             }
             ClaimCommand::Execute { claim_id } => {
                 ensure_certify_transport_security(&args)?;
@@ -1231,17 +1233,17 @@ async fn main() -> anyhow::Result<()> {
                         claim_id: hex_decode_bytes(&claim_id)?,
                     })
                     .await?;
-                let mut output = if verify_etl {
+                let mut output = if *verify_etl {
                     let cache_path = cache_file_path();
                     let cache_entry_key = cache_key(&args.endpoint, &args.kernel_pubkey_hex);
                     let mut cache = load_sth_cache(&cache_path)?;
 
                     let root: [u8; 32] = resp
-                        .etl_root_hash
+                        .root_hash
                         .clone()
                         .try_into()
                         .map_err(|_| anyhow!("etl root hash must be 32 bytes"))?;
-                    let inclusion = resp.inclusion.context("missing inclusion proof")?;
+                    let inclusion = resp.inclusion_proof.context("missing inclusion proof")?;
                     let inclusion = InclusionProof {
                         leaf_hash: inclusion
                             .leaf_hash
@@ -1252,20 +1254,22 @@ async fn main() -> anyhow::Result<()> {
                         audit_path: inclusion
                             .audit_path
                             .into_iter()
-                            .map(|n| {
+                            .map(|n: Vec<u8>| {
                                 n.try_into()
                                     .map_err(|_| anyhow!("audit path node must be 32 bytes"))
                             })
                             .collect::<anyhow::Result<Vec<[u8; 32]>>>()?,
                     };
-                    let consistency = resp.consistency.context("missing consistency proof")?;
+                    let consistency = resp
+                        .consistency_proof
+                        .context("missing consistency proof")?;
                     let consistency = ConsistencyProof {
                         old_tree_size: consistency.old_tree_size,
                         new_tree_size: consistency.new_tree_size,
                         path: consistency
                             .path
                             .into_iter()
-                            .map(|n| {
+                            .map(|n: Vec<u8>| {
                                 n.try_into()
                                     .map_err(|_| anyhow!("consistency node must be 32 bytes"))
                             })
@@ -1279,7 +1283,7 @@ async fn main() -> anyhow::Result<()> {
                         &mut cache,
                         &cache_entry_key,
                         CachedSth {
-                            tree_size: resp.etl_tree_size,
+                            tree_size: resp.tree_size,
                             root_hash: root,
                         },
                         &consistency,
@@ -1294,10 +1298,12 @@ async fn main() -> anyhow::Result<()> {
                     if !args.kernel_pubkey_hex.is_empty() {
                         let pubkey = hex_decode_bytes(&args.kernel_pubkey_hex)?;
                         let sth = SignedTreeHead {
-                            tree_size: resp.etl_tree_size,
+                            tree_size: resp.tree_size,
                             root_hash: root,
                             signature: resp
-                                .sth_signature
+                                .signed_tree_head
+                                .context("missing signed tree head")?
+                                .signature
                                 .clone()
                                 .try_into()
                                 .map_err(|_| anyhow!("sth signature must be 64 bytes"))?,
@@ -1307,14 +1313,15 @@ async fn main() -> anyhow::Result<()> {
 
                     persist_sth_cache(&cache_path, &cache)?;
 
-                    serde_json::json!({"capsule_len": resp.capsule.len(), "inclusion_ok": inclusion_ok, "consistency_ok": consistency_ok})
+                    serde_json::json!({"capsule_len": resp.capsule_bytes.len(), "inclusion_ok": inclusion_ok, "consistency_ok": consistency_ok})
                 } else {
-                    serde_json::json!({"capsule_len": resp.capsule.len(), "etl_index": resp.etl_index})
+                    serde_json::json!({"capsule_len": resp.capsule_bytes.len(), "etl_index": resp.etl_index})
                 };
 
-                if print_capsule_json {
-                    let capsule_json: serde_json::Value = serde_json::from_slice(&resp.capsule)
-                        .context("capsule is not valid json")?;
+                if *print_capsule_json {
+                    let capsule_json: serde_json::Value =
+                        serde_json::from_slice(&resp.capsule_bytes)
+                            .context("capsule is not valid json")?;
                     output["capsule_summary"] = build_capsule_print_summary(&capsule_json);
                 }
 
@@ -1347,10 +1354,12 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
             while let Some(ev) = stream.next().await {
                 let ev = ev?;
-                println!(
-                    "{}",
-                    serde_json::json!({"claim_id": hex_encode(&ev.claim_id), "reason_code": ev.reason_code, "logical_epoch": ev.logical_epoch})
-                );
+                for entry in ev.entries {
+                    println!(
+                        "{}",
+                        serde_json::json!({"claim_id": hex_encode(&entry.claim_id), "reason": entry.reason, "timestamp_unix": entry.timestamp_unix})
+                    );
+                }
             }
         }
     }
