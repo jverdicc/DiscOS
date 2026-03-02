@@ -9,13 +9,13 @@
     {
       "n": 16,
       "psplit": 0.1,
-      "mean_leaked_bits": 3.596,
+      "mean_leaked_bits": 3.615,
       "p99_leaked_bits": 7
     },
     {
       "n": 32,
       "psplit": 0.2,
-      "mean_leaked_bits": 8.4155,
+      "mean_leaked_bits": 8.347,
       "p99_leaked_bits": 14
     }
   ]

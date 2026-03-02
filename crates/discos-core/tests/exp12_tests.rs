@@ -18,8 +18,11 @@ async fn exp12_matches_golden_fixture() {
     .await
     .unwrap_or_else(|e| panic!("exp12 should run: {e}"));
 
-    let expected = std::fs::read_to_string("crates/discos-core/test_vectors/exp12_golden.json")
-        .unwrap_or_else(|e| panic!("fixture missing: {e}"));
+    let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("test_vectors")
+        .join("exp12_golden.json");
+    let expected = std::fs::read_to_string(&fixture_path)
+        .unwrap_or_else(|e| panic!("fixture missing at {}: {e}", fixture_path.display()));
     let expected_json: serde_json::Value =
         serde_json::from_str(&expected).unwrap_or_else(|e| panic!("invalid fixture json: {e}"));
     let actual_json = serde_json::to_value(&result)

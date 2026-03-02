@@ -51,36 +51,23 @@ pub struct Exp12Result {
     pub rows: Vec<Exp12Row>,
 }
 
-#[derive(Debug, Clone)]
-struct Lcg64 {
-    state: u64,
+fn uniform_u53(seed: u64, trial_idx: usize, bit_idx: usize) -> f64 {
+    let mut x = seed
+        ^ ((trial_idx as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+        ^ ((bit_idx as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9));
+    x ^= x >> 30;
+    x = x.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x ^= x >> 27;
+    x = x.wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^= x >> 31;
+    let v = x >> 11;
+    (v as f64) * (1.0 / ((1u64 << 53) as f64))
 }
 
-impl Lcg64 {
-    fn new(seed: u64) -> Self {
-        Self {
-            state: seed ^ 0x9E37_79B9_7F4A_7C15,
-        }
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        self.state = self
-            .state
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        self.state
-    }
-
-    fn next_f64(&mut self) -> f64 {
-        let v = self.next_u64() >> 11;
-        (v as f64) * (1.0 / ((1u64 << 53) as f64))
-    }
-}
-
-fn binomial_sample(n: usize, p: f64, rng: &mut Lcg64) -> usize {
+fn binomial_sample(n: usize, p: f64, seed: u64, trial_idx: usize) -> usize {
     let mut s = 0usize;
-    for _ in 0..n {
-        if rng.next_f64() < p {
+    for bit_idx in 0..n {
+        if uniform_u53(seed, trial_idx, bit_idx) < p {
             s += 1;
         }
     }
@@ -93,16 +80,14 @@ pub async fn run_exp12(cfg: &Exp12Config) -> anyhow::Result<Exp12Result> {
     }
 
     let mut rows = Vec::with_capacity(cfg.scenarios.len());
-    let mut rng = Lcg64::new(cfg.seed);
-
     for scenario in &cfg.scenarios {
         if !scenario.psplit.is_finite() || !(0.0..=1.0).contains(&scenario.psplit) {
             anyhow::bail!("psplit must be finite and within [0,1]");
         }
 
         let mut leaked = Vec::with_capacity(cfg.trials);
-        for _ in 0..cfg.trials {
-            let s = binomial_sample(scenario.n, scenario.psplit, &mut rng);
+        for trial_idx in 0..cfg.trials {
+            let s = binomial_sample(scenario.n, scenario.psplit, cfg.seed, trial_idx);
             leaked.push(cfg.topic_budget_bits + s);
         }
 
