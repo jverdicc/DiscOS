@@ -149,13 +149,8 @@ impl Interceptor for AuthInterceptor {
                     .as_secs()
                     .to_string();
 
-                let headers = build_hmac_headers(
-                    &request_id,
-                    "/",
-                    Some(&timestamp),
-                    secret,
-                    Some(key_id),
-                );
+                let headers =
+                    build_hmac_headers(&request_id, "/", Some(&timestamp), secret, Some(key_id));
 
                 let request_id_value = MetadataValue::try_from(headers.request_id.as_str())
                     .map_err(|e| Status::invalid_argument(format!("invalid request id: {e}")))?;
@@ -510,6 +505,7 @@ pub fn merkle_leaf_hash(payload: &[u8]) -> [u8; 32] {
     verifier::etl_leaf_hash(payload)
 }
 
+#[cfg(test)]
 fn merkle_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
     let mut material = Vec::with_capacity(65);
     material.push(0x01);
@@ -607,8 +603,8 @@ pub fn verify_capsule_response(
             .as_slice()
             .try_into()
             .map_err(|_| {
-            ClientError::VerificationFailed("sth_signature must be 64 bytes".to_string())
-        })?,
+                ClientError::VerificationFailed("sth_signature must be 64 bytes".to_string())
+            })?,
     };
     verify_sth_signature(&sth, server_pubkey)?;
 
