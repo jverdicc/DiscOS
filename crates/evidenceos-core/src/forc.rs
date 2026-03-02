@@ -39,7 +39,7 @@ pub fn total_transcript_leakage(
 
 /// Computes the Theorem-1-style adjusted alpha: `alpha' = alpha * 2^(-k_tot)`.
 pub fn adjusted_alpha(alpha: f64, k_tot_bits: f64) -> Result<f64, String> {
-    if !alpha.is_finite() || alpha < 0.0 || alpha > 1.0 {
+    if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
         return Err("alpha must be finite and in [0, 1]".to_string());
     }
     if !k_tot_bits.is_finite() || k_tot_bits < 0.0 {
