@@ -149,7 +149,7 @@ jobs:
           ../EvidenceOS/target/release/evidenceos-daemon --preflight-http-listen 127.0.0.1:8787 --data-dir artifacts/preflight-e2e/data > artifacts/preflight-e2e/daemon.log 2>&1 &
           echo $! > artifacts/preflight-e2e/daemon.pid
           for _ in $(seq 1 60); do
-            code=$(curl -s -o artifacts/preflight-e2e/preflight.json -w "%{http_code}" http://127.0.0.1:8080/preflight || true)
+            code=$(curl -s -o artifacts/preflight-e2e/preflight.json -w "%{http_code}" ${EVIDENCEOS_PREFLIGHT_URL}/preflight || true)
             if [ "$code" = "200" ]; then
               exit 0
             fi
